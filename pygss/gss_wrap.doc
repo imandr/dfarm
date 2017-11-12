@@ -1,0 +1,226 @@
+gss_wrap.c
+
+[ Python Module : gssc ]
+
+
+1.  class gss_OID_desc
+======================
+[ created from struct gss_OID_desc ]
+
+
+gss_OID_desc_length_set(gss_OID_desc *,OM_uint32 )
+gss_OID_desc_length_get(gss_OID_desc *)
+        [ Member data: returns OM_uint32  ]
+
+gss_OID_desc_elements_set(gss_OID_desc *,void *)
+gss_OID_desc_elements_get(gss_OID_desc *)
+        [ Member data: returns void * ]
+
+2.  class gss_OID_set_desc
+==========================
+[ created from struct gss_OID_set_desc ]
+
+
+gss_OID_set_desc_count_set(gss_OID_set_desc *,size_t *)
+gss_OID_set_desc_count_get(gss_OID_set_desc *)
+        [ Member data: returns size_t * ]
+
+gss_OID_set_desc_elements_set(gss_OID_set_desc *,gss_OID )
+gss_OID_set_desc_elements_get(gss_OID_set_desc *)
+        [ Member data: returns gss_OID  ]
+
+3.  class gss_buffer_desc
+=========================
+[ created from struct gss_buffer_desc ]
+
+
+gss_buffer_desc_length_set(gss_buffer_desc *,size_t *)
+gss_buffer_desc_length_get(gss_buffer_desc *)
+        [ Member data: returns size_t * ]
+
+gss_buffer_desc_value_set(gss_buffer_desc *,void *)
+gss_buffer_desc_value_get(gss_buffer_desc *)
+        [ Member data: returns void * ]
+
+4.  class gssName
+=================
+[ created from struct gssName ]
+
+
+gssName_name_set(gssName *,gss_name_t )
+gssName_name_get(gssName *)
+        [ Member data: returns gss_name_t  ]
+
+new_gssName()
+        [ Constructor: returns gssName * ]
+
+delete_gssName(gssName *)
+        [ Destructor: returns void  ]
+
+gssName_import_name(gssName *,input_name,name_type)
+        [ Member : returns void  ]
+
+gssName_display(gssName *)
+        [ Member : returns PyObject * ]
+
+gssName_export(gssName *)
+        [ Member : returns PyObject * ]
+
+gssName_compare(gssName *,other)
+        [ Member : returns int  ]
+
+gssName_duplicate(gssName *)
+        [ Member : returns gssName * ]
+
+gssName_canonicalize(gssName *,mech_type)
+        [ Member : returns gssName * ]
+
+5.  class gssCred
+=================
+[ created from struct gssCred ]
+
+
+gssCred_cred_set(gssCred *,gss_cred_id_t )
+gssCred_cred_get(gssCred *)
+        [ Member data: returns gss_cred_id_t  ]
+
+new_gssCred()
+        [ Constructor: returns gssCred * ]
+
+delete_gssCred(gssCred *)
+        [ Destructor: returns void  ]
+
+gssCred_acquire(gssCred *,desired_name,time_req,desired_mechs,cred_usage)
+        [ Member : returns PyObject * ]
+
+gssCred_inquire(gssCred *)
+        [ Member : returns PyObject * ]
+
+6.  class gssContext
+====================
+[ created from struct gssContext ]
+
+
+gssContext_ctx_set(gssContext *,gss_ctx_id_t )
+gssContext_ctx_get(gssContext *)
+        [ Member data: returns gss_ctx_id_t  ]
+
+new_gssContext()
+        [ Constructor: returns gssContext * ]
+
+delete_gssContext(gssContext *)
+        [ Destructor: returns void  ]
+
+gssContext_init(gssContext *,initiator_cred_handle,target_name,mech_type,req_flags,time_req,chan,input_token)
+        [ Member : returns PyObject * ]
+
+gssContext_accept(gssContext *,acceptor_cred_handle,input_token_buffer)
+        [ Member : returns PyObject * ]
+
+gssContext_process_token(gssContext *,token_buffer)
+        [ Member : returns void  ]
+
+gssContext_time(gssContext *)
+        [ Member : returns int  ]
+
+gssContext_wrap_size_limit(gssContext *,conf_req_flag,qop_req,req_output_size)
+        [ Member : returns int  ]
+
+gssContext_inquire(gssContext *)
+        [ Member : returns PyObject * ]
+
+gssContext_wrap(gssContext *,conf_req_flag,qop_req,input_message_buffer)
+        [ Member : returns PyObject * ]
+
+gssContext_unwrap(gssContext *,input_message_buffer)
+        [ Member : returns PyObject * ]
+
+gssContext_get_mic(gssContext *,qop_req,message_buffer)
+        [ Member : returns gss_buffer_t  ]
+
+gssContext_verify_mic(gssContext *,message_buffer,message_token)
+        [ Member : returns int  ]
+
+----------
+
+cvar.gss_mech_krb5
+        [ Global : gss_OID gss_mech_krb5 ]
+
+cvar.gss_mech_krb5_old
+        [ Global : gss_OID gss_mech_krb5_old ]
+
+cvar.gss_mech_krb5_v2
+        [ Global : gss_OID gss_mech_krb5_v2 ]
+
+cvar.gss_mech_set_krb5_old
+        [ Global : gss_OID_set gss_mech_set_krb5_old ]
+
+cvar.gss_mech_set_krb5_both
+        [ Global : gss_OID_set gss_mech_set_krb5_both ]
+
+cvar.gss_mech_set_krb5_v2
+        [ Global : gss_OID_set gss_mech_set_krb5_v2 ]
+
+cvar.gss_mech_set_krb5_v1v2
+        [ Global : gss_OID_set gss_mech_set_krb5_v1v2 ]
+        const gss_OID GSS_MECH_KRB5 = gss_mech_krb5; const gss_OID GSS_MECH_KRB5_OLD
+        = gss_mech_krb5_old; const gss_OID GSS_MECH_KRB5_V2 = gss_mech_krb5_v2;
+        
+
+cvar.GSS_PY_NO_NAME
+        [ Global : gssName GSS_PY_NO_NAME ]
+
+cvar.gss_nt_user_name
+        [ Global : gss_OID gss_nt_user_name ]
+
+cvar.gss_nt_machine_uid_name
+        [ Global : gss_OID gss_nt_machine_uid_name ]
+
+cvar.gss_nt_string_uid_name
+        [ Global : gss_OID gss_nt_string_uid_name ]
+
+cvar.gss_nt_service_name
+        [ Global : gss_OID gss_nt_service_name ]
+
+cvar.gss_nt_exported_name
+        [ Global : gss_OID gss_nt_exported_name ]
+
+cvar.gss_nt_service_name_v2
+        [ Global : gss_OID gss_nt_service_name_v2 ]
+
+GSS_PY_BOTH = 0
+        [ Constant: gss_cred_usage_t  ]
+
+GSS_PY_INITIATE = 1
+        [ Constant: gss_cred_usage_t  ]
+
+GSS_PY_ACCEPT = 2
+        [ Constant: gss_cred_usage_t  ]
+
+GSS_PY_DELEG_FLAG = 1
+        [ Constant: unsigned int  ]
+
+GSS_PY_MUTUAL_FLAG = 2
+        [ Constant: unsigned int  ]
+
+GSS_PY_REPLAY_FLAG = 4
+        [ Constant: unsigned int  ]
+
+GSS_PY_SEQUENCE_FLAG = 8
+        [ Constant: unsigned int  ]
+
+GSS_PY_CONF_FLAG = 16
+        [ Constant: unsigned int  ]
+
+GSS_PY_INTEG_FLAG = 32
+        [ Constant: unsigned int  ]
+
+GSS_PY_ANON_FLAG = 64
+        [ Constant: unsigned int  ]
+
+GSS_PY_PROT_READY_FLAG = 128
+        [ Constant: unsigned int  ]
+
+GSS_PY_TRANS_FLAG = 256
+        [ Constant: unsigned int  ]
+

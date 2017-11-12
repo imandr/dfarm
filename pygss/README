@@ -1,0 +1,35 @@
+
+Python GSS-API
+Copyright (C) 2000, David Margrave <david@margrave.com>
+
+
+Compiling
+
+First, you will need to obtain MIT Kerberos V5-1.1. from 
+ftp://athena-dist.mit.edu/pub/kerberos/  Regrettably, I
+don't feel up to providing this for you myself, or for providing
+binaries of this python module.  Also, you will need SWIG 
+(http://www.swig.org) in order to produce new C wrapper code if you plan
+to modify the SWIG interface file.  If not, you can simply use the
+wrapper code as-is.
+
+Testing
+
+You will want to change the default values in the client.py and
+server.py scripts to reflect your local setup (i.e. principal names,
+realm name, etc.)
+
+You will need to set up a KDC, and extract a service principal for your
+host to the /etc/krb5.keytab file.  Refer to the MIT kerberos
+documentation for instructions on how to do this.  The user running the
+server application will have to have read access to this file.  For the
+client, you will need to obtain a ticket granting ticket (TGT) prior to
+running the client application, or it will complain about being unable
+to obtain credentials.  
+
+
+Good luck,
+
+David Margrave
+david@margrave.com
+

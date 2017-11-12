@@ -1,0 +1,10 @@
+#
+# @(#) $Id: setup_dfarm.csh.template,v 1.1 2001/11/05 16:32:49 ivm Exp $
+#
+
+# Non UPS installation:
+# 1. Copy this file into <product directory>/bin/setup_dfarm.csh
+# 2. Define DFARM_ROOT variable manually:
+
+setenv DFARM_ROOT _ROOT_
+setenv DFARM_CONFIG ${DFARM_ROOT}/cfg/dfarm.cfg

@@ -1,0 +1,43 @@
+#
+# @(#) $Id: dfarm.table,v 1.4 2002/04/30 20:07:15 ivm Exp $
+#
+
+FILE=TABLE
+PRODUCT=dfarm
+
+Group:
+  Flavor=ANY
+  Qualifiers=""
+ 
+
+  Action=Setup
+    setupEnv()
+    proddir()
+    pathPrepend(PATH, ${UPS_PROD_DIR}/bin)
+    setupRequired("python")
+	setupRequired("fcslib")
+    envPrepend(PYTHONPATH,"${UPS_PROD_DIR}/lib")
+    envPrepend(MANPATH,"${UPS_PROD_DIR}/man")
+	sourceRequired(${UPS_PROD_DIR}/bin/setup_dfarm.${UPS_SHELL}, UPS_ENV)
+  Action=Tailor
+  	setupEnv()
+	execute(${UPS_PROD_DIR}/ups/tailor.sh, UPS_ENV)
+End:
+
+Group:
+  Flavor=ANY
+  Qualifiers="local_python"
+ 
+
+  Action=Setup
+    setupEnv()
+    proddir()
+    pathPrepend(PATH, ${UPS_PROD_DIR}/bin)
+	setupRequired("fcslib")
+    envPrepend(PYTHONPATH,"${UPS_PROD_DIR}/lib")
+    envPrepend(MANPATH,"${UPS_PROD_DIR}/man")
+	sourceRequired(${UPS_PROD_DIR}/bin/setup_dfarm.${UPS_SHELL}, UPS_ENV)
+  Action=Tailor
+  	setupEnv()
+	execute(${UPS_PROD_DIR}/ups/tailor.sh, UPS_ENV)
+End:

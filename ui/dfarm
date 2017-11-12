@@ -1,0 +1,7 @@
+#!/bin/sh -f
+#
+# @(#) $Id: dfarm,v 1.2 2001/04/04 20:19:03 ivm Exp $
+#
+
+
+python $DFARM_DIR/lib/dfarm_api.py $@
