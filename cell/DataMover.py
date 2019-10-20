@@ -179,7 +179,7 @@ class   SocketRcvr:
                                 self.dataClosed()
                                 return
                         if self.TheFile == None:
-                                        self.TheFile = open(self.Txn.dataPath(),'w')
+                                        self.TheFile = open(self.Txn.dataPath(),'wb')
                         try:    self.TheFile.write(data)
                         except: self.abort()                    
                         
@@ -558,10 +558,10 @@ class   DataMover(HasTxns):
                 self.Sel = sel
                 self.Cfg = cfg
                 self.MyID = myid
-                self.MaxGet = cfg.getValue('storage',self.MyID,'max_get',3)
-                self.MaxPut = cfg.getValue('storage',self.MyID,'max_put',1)
-                self.MaxRep = cfg.getValue('storage',self.MyID,'max_rep',2)
-                self.MaxTxn = cfg.getValue('storage',self.MyID,'max_txn',5)
+                self.MaxGet = cfg.get('max_get',3)
+                self.MaxPut = cfg.get('max_put',1)
+                self.MaxRep = cfg.get('max_rep',2)
+                self.MaxTxn = cfg.get('max_txn',5)
                 self.Replicators = []
                 self.Handles = {}
 

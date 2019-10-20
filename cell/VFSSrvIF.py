@@ -51,9 +51,7 @@ class   VFSSrvIF:
         def __init__(self, myid, cfg, sel):
                 self.ID = myid
                 self.Sel = sel
-                self.DSAddr = \
-                        (cfg.getValue('vfssrv','*','host'),
-                         cfg.getValue('vfssrv','*','cellif_port'))
+                self.DSAddr = (cfg['host'], cfg['cellif_port'])
                 self.Connected = 0
                 self.Reconciled = 0
                 self.LastIdle = 0

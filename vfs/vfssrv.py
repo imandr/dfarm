@@ -64,11 +64,11 @@ def set_signals():
         signal.signal(signal.SIGHUP, handle_signal)
 
 if __name__ == '__main__':
+    from dfconfig import DFConfig
 
     opts, args = getopt.getopt(sys.argv[1:], "c:")
     opts = dict(opts)
-    cfgfile = opts.get("-c") or os.environ['DFARM_VFS_CONFIG']
-    cfg = yaml.load(open(cfgfile, "r"), Loader=yaml.SafeLoader)["VFSServer"]
+    cfg = DFConfig(opts.get("-c"), 'DFARM_VFS_CONFIG')["VFSServer"]
     
     sel = Selector()
     logpath = cfg.get('log')

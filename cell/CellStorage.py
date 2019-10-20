@@ -403,13 +403,12 @@ class   PSA(HasTxns):
 class   CellStorageMgr:
         def __init__(self, myid, myclass, cfg):
                 self.PSAs = {}
-                for psan in cfg.names('storage',myclass):
+                for psan, params in cfg.items():
                         if psan in ['max_get','max_put','max_txn','max_rep']:
                                 continue
-                        params = cfg.getValueList('storage', myclass, psan)
-                        if not params or len(params) < 2:       continue
+                        if not isinstance(params, list) or len(params) < 2:       continue
                         attractors = {}
-                        root, size = tuple(params[:2])
+                        root, size = params[:2]
                         params = params[2:]
                         if not params:
                                 params = ['*:50']

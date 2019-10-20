@@ -106,16 +106,18 @@
 from SockStream import SockStream
 from VFSFileInfo import *
 import select
-import os
+import os, sys
 import time
 import stat
 import pwd
 from socket import *
 from config import ConfigFile
 
-from py3 import to_bytes, to_str
+from py3 import to_str, to_bytes
 
-DiskFarmError = 'DiskFarmError'
+class DiskFarmError(Exception):
+    def __init__(self, value):
+        self.Value = value
 
 class   CellInfo:
         def __init__(self, nname):
@@ -143,7 +145,7 @@ class   FileHandle:
                 t0 = time.time()
                 done = 0
                 while tmo == None or time.time() < t0 + tmo:
-                        self.Sock.sendto(msg, self.DFC.CAddr)
+                        self.Sock.sendto(to_bytes(msg), self.DFC.CAddr)
                         r,w,e = select.select([self.Sock],[],[],2.0)
                         if r:
                                 reply, addr = self.Sock.recvfrom(10000)
@@ -162,7 +164,7 @@ class   FileHandle:
                 t0 = time.time()
                 data = None
                 while tmo == None or time.time() < t0 + tmo:
-                        try:    self.Sock.sendto(msg, self.DAddr)
+                        try:    self.Sock.sendto(to_bytes(msg), self.DAddr)
                         except: break
                         r,w,e = select.select([self.Sock],[],[],2.0)
                         if r:
@@ -180,22 +182,21 @@ class   FileHandle:
 
 class   DiskFarmClient:
         def __init__(self, cfg = None):
-                if cfg == None:
-                        cfg = os.environ['DFARM_CONFIG']
-                if type(cfg) == type(''):
-                        cfg = ConfigFile(cfg)
+                if isinstance(cfg, str):
+                    from dfconfig import DFConfig
+                    cfg = DFConfig(cfg, 'DFARM_CONFIG')
+                else:
+                    assert isinstance(cfg, dict)
                 self.Cfg = cfg
                 self.CSock = socket(AF_INET, SOCK_DGRAM)
                 self.CSock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-                self.CAddr = (cfg.getValue('cell','*','broadcast'),
-                        cfg.getValue('cell','*','listen_port'))         
-                self.DAddr = (cfg.getValue('vfssrv','*','host'),
-                        cfg.getValue('vfssrv','*','api_port'))
-                self.FarmName = cfg.getValue('cell','*','farm_name','*')
-                self.NodeList = cfg.names('cell_class','*')
+                self.CAddr = (cfg["cell"]['broadcast'], cfg["cell"]['listen_port'])         
+                self.DAddr = (cfg['VFSServer']['host'],cfg['VFSServer']['api_port'])
+                self.FarmName = cfg['cell']['farm_name']
+                self.NodeList = list(cfg['cell_class'].keys())
                 if not self.NodeList:   self.NodeList = []
                 self.NodeAddrMap = {}
-                domain = cfg.getValue('cell','*','domain','')
+                domain = cfg['cell']['domain']
                 if domain and domain[0] != '.':
                         domain = '.' + domain
                 for n in self.NodeList:
@@ -256,7 +257,7 @@ class   DiskFarmClient:
                 if type(nlst) != type([]):
                         nlst = [nlst]
                 self.connect()
-                ans = self.DStr.sendAndRecv('HOLD %s' % ' '.join(nlst))
+                ans = self.DStr.sendAndRecv('HOLD %s' % " ".join(nlst))
                 if not ans:
                         return None, 'Connection closed'
                 words = ans.split(None, 1)
@@ -269,7 +270,7 @@ class   DiskFarmClient:
                 if type(nlst) != type([]):
                         nlst = [nlst]
                 self.connect()
-                ans = self.DStr.sendAndRecv('RELEASE %s' % ' '.join(nlst))
+                ans = self.DStr.sendAndRecv('RELEASE %s' % " ".join(nlst))
                 if not ans:
                         return None, 'Connection closed'
                 words = ans.split(None, 1)
@@ -282,7 +283,7 @@ class   DiskFarmClient:
                 if type(nlst) != type([]):
                         nlst = [nlst]
                 self.connect()
-                ans = self.DStr.sendAndRecv('REPNODE %d %s' % (mult, ' '.join(nlst)))
+                ans = self.DStr.sendAndRecv('REPNODE %d %s' % (mult,  " ".join(nlst)))
                 if not ans:
                         return None, 'Connection closed'
                 words = ans.split(None, 1)
@@ -306,7 +307,7 @@ class   DiskFarmClient:
                 self.disconnect()
                 if not ans:
                         return None, 'Connection closed'
-                words = abs.split()
+                words = ans.split()
                 if words[0] != 'OK':
                         return None, words[1]
                 if len(words) < 4:
@@ -461,9 +462,10 @@ class   DiskFarmClient:
                 r = []
                 retry = 5
                 while retry > 0 and not r:
-                        try:    sock.sendto('DPATH %s %s %s' % (self.FarmName, lpath, 
-                                                info.CTime), 
-                                                ('127.0.0.1', self.CAddr[1]))
+                        msg = to_bytes('DPATH %s %s %s' % (self.FarmName, lpath, 
+                                                info.CTime)
+                        )
+                        try:    sock.sendto(msg, ('127.0.0.1', self.CAddr[1]))
                         except:
                                 break
                         r,w,e = select.select([sock],[],[],3)
@@ -478,7 +480,7 @@ class   DiskFarmClient:
                 
         def cellInfo(self, node):
                 sock = socket(AF_INET, SOCK_DGRAM)
-                sock.sendto('STATPSA %s' % self.FarmName, (node, self.CAddr[1]))
+                sock.sendto(to_bytes('STATPSA %s' % self.FarmName, (node, self.CAddr[1])))
                 r,w,e = select.select([sock],[],[],30)
                 if not r:
                         sock.close()
@@ -518,7 +520,7 @@ class   DiskFarmClient:
                 sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
                 t0 = time.time()
                 lst = []
-                sock.sendto('PING %s' % self.FarmName, self.CAddr)
+                sock.sendto(to_bytes('PING %s' % self.FarmName, self.CAddr))
                 r,w,e = select.select([sock],[],[],3)
                 t = time.time()
                 #print r
@@ -584,14 +586,14 @@ class   DiskFarmClient:
                                 except:
                                         break
                                 nwait = nwait - 1
-                                msgs.append((to_str(msg), addr, time.time()))
+                                msgs.append((msg, addr, time.time()))
                         while nwait >= maxping or \
                                         (nwait > 0 and itosend >= len(self.NodeList)):
                                 # wait for answers if necessary
                                 r,w,e = select.select([sock],[],[],3)
                                 if r:
                                         msg, addr = sock.recvfrom(100000)
-                                        msgs.append((to_str(msg), addr, time.time()))
+                                        msgs.append((msg, addr, time.time()))
                                         nwait = nwait - 1
                                 else:
                                         # we have waited for 3 seconds, and are not getting 
@@ -603,13 +605,11 @@ class   DiskFarmClient:
                                 itosend = itosend + 1
                                 nwait = nwait + 1
                                 addr = (self.NodeAddrMap[n], self.CAddr[1])
-                                try:    
-                                    sock.sendto(pingmsg, addr)
-                                    print ("ping sent to", addr)
-                                except: 
-                                    raise
+                                try:    sock.sendto(pingmsg, addr)
+                                except: raise
                                 sent_times[n] = time.time()
                         for msg, addr, t in msgs:
+                                msg = to_str(msg)
                                 words = msg.split()
                                 if len(words) >= 3 and words[0] == 'PONG':
                                         words = words[1:]
@@ -651,7 +651,7 @@ class   DiskFarmClient:
                 return lst
 
         def sendBCast(self, msg):
-                try:    self.CSock.sendto(msg, self.CAddr)
+                try:    self.CSock.sendto(to_bytes(msg), self.CAddr)
                 except: pass            
                 
         def sendSendBcast(self, lpath, info, ctl_sock, ctladdr, nolocal=0, tmo=None):
@@ -661,7 +661,7 @@ class   DiskFarmClient:
                         bcast = 'SEND'
                 bcast = bcast + ' %s %s %s %s %s' % (self.FarmName, lpath, info.CTime,
                         ctladdr[0], ctladdr[1])         
-                self.CSock.sendto(bcast, self.CAddr)
+                self.CSock.sendto(to_bytes(bcast), self.CAddr)
 
         def get(self, lpath, fn, info, nolocal = 0, tmo = None):
                 ctl_sock = socket(AF_INET, SOCK_STREAM)
@@ -683,7 +683,7 @@ class   DiskFarmClient:
                 str = SockStream(mover_ctl)
                 msg = str.recv()
                 if msg[:5] == 'LOCAL':
-                        path = msg[5].strip()
+                        path = msg[5:].strip()
                         sts, err = self.local_get(str, fn, path)
                 elif msg == 'RECV':
                         sts, err = self.remote_get(str, fn, tmo)
@@ -768,7 +768,7 @@ class   DiskFarmClient:
                 bcast = '%s %s %d %s %s %s %s' % (cmd, self.FarmName, ncopies-1, lpath,
                         ctladdr[0], ctladdr[1], info.serialize())
                 #print 'Sending <%s> to <%s>' % (bcast, self.CAddr)
-                self.CSock.sendto(bcast, self.CAddr)
+                self.CSock.sendto(to_bytes(bcast), self.CAddr)
                 
         def waitForConnect(self, ctl_sock, tmo=None):
                 r,w,d = select.select([ctl_sock],[],[],tmo)
@@ -799,9 +799,10 @@ class   DiskFarmClient:
                 str = SockStream(mover_ctl)
                 msg = str.recv()
                 if msg == 'SEND':
-                        try:    sts, err = self.remote_put(addr[0] == ctl_host, str, fn)
+                        try:    
+                                sts, err = self.remote_put(addr[0] == ctl_host, str, fn)
                         except:
-                                sts, err = 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
+                                sts, err = 0, 'remote_put error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
                 else:
                         sts, err = 0, 'Transfer initiation failed'
                 mover_ctl.close()
@@ -824,7 +825,7 @@ class   DiskFarmClient:
                 tx_sock, addr = data_sock.accept()
                 data_sock.close()
                 eof = 0
-                fd = open(fn, 'r')
+                fd = open(fn, 'rb')
                 buf = ''
                 done = 0
                 t0 = time.time()
@@ -874,194 +875,6 @@ def long2str(x):
                 str = str[:-1]
         return str
 
-class   PingPrinter:
-        def __init__(self, cfg, f, fmt, downFmt):
-                self.MinT = None
-                self.MaxT = None
-                self.NUp = 0
-                self.NDown = 0
-                self.TimeSum = 0
-                self.F = f
-                self.NW = 0
-                self.NR = 0
-                self.FreeSpace = 0
-                self.N10M = 0
-                self.N100M = 0
-                self.N1G = 0
-                self.Format = fmt
-                self.DownFormat = downFmt
-                self.NodeList = sorted(cfg.names('cell_class','*'))
-                self.NextNode = 0
-                self.NodeDict = {}
-
-        def cmpNodes(self, x, y):
-                ix = len(x)
-                while ix > 0:
-                        if x[ix-1] in '0123456789':
-                                ix = ix -1
-                        else:
-                                break
-                px = x[:ix]
-                try:    nx = int(x[ix:])
-                except: nx = 0
-                iy = len(y)
-                while iy > 0:
-                        if y[iy-1] in '0123456789':
-                                iy = iy -1
-                        else:
-                                break
-                py = y[:iy]
-                try:    ny = int(y[iy:])
-                except: ny = 0
-                return cmp(px, py) or cmp(nx, ny)
-                
-        def done(self):
-                for n in self.NodeList:
-                        # print n, self.NodeDict.has_key(n)
-                        if n not in self.NodeDict:
-                                return 0
-                return 1
-                                                
-        def pong(self, addr, cid, t, nw, nr, sts, capdct):
-                #print 'pong: %s' % cid, cid in self.NodeList
-                self.NUp = self.NUp + 1
-                if nw != None:          self.NW = self.NW + nw
-                if nr != None:          self.NR = self.NR + nr
-                for psan, caps in list(capdct.items()):
-                        size, lfree, pfree = caps
-                        f = min(lfree, pfree)
-                        self.FreeSpace = self.FreeSpace + f
-                        if f >= 1024:
-                                self.N1G = self.N1G + 1
-                        if f >= 100:
-                                self.N100M = self.N100M + 1
-                        if f >= 10:
-                                self.N10M = self.N10M + 1
-                if t != None:           
-                        self.TimeSum = self.TimeSum + t
-                        if self.MinT == None or self.MinT > t:
-                                self.MinT = t
-                        if self.MaxT == None or self.MaxT < t:
-                                self.MaxT = t
-                if cid == None:
-                        cid = gethostbyaddr(addr)[0]
-                self.NodeDict[cid] = (t, nw, nr, sts)
-                self.printCells()
-                
-        def printCells(self):
-                while self.NextNode < len(self.NodeList) and \
-                                self.NodeList[self.NextNode] in self.NodeDict:
-                        cid = self.NodeList[self.NextNode]
-                        self.NextNode = self.NextNode + 1
-                        
-                        t, nw, nr, sts = self.NodeDict[cid]
-                        # del self.NodeDict[cid]
-                        if t != None:
-                                self.F.write(self.Format % (cid, int(t*1000 + 0.5), nw, nr, sts))
-                        else:
-                                self.F.write(self.DownFormat % cid)
-                        #print 'Next node: %s, in dict: %d' % (
-                        #       self.NodeList[self.NextNode], 
-                        #       self.NodeDict.has_key(self.NodeList[self.NextNode]))
-
-        def close(self):
-                for cid in self.NodeList[self.NextNode:]:
-                        try:    t, nw, nr, sts = self.NodeDict[cid]
-                        except:
-                                self.NDown = self.NDown + 1
-                                self.F.write(self.DownFormat % cid)
-                        else:
-                                self.F.write(self.Format % (cid, int(t*1000 + 0.5), nw, nr, sts))                       
-                                
-        def getStats(self):
-                if self.NUp == 0:
-                        return self.NUp, self.NDown, None, None, None, None, None
-                return (self.NUp, self.NDown,
-                        (self.MinT * 1000 + 0.5), 
-                        (self.MaxT * 1000 + 0.5), 
-                        (self.TimeSum/self.NUp * 1000 + 0.5),
-                        self.NW, self.NR)
-
-class   CapacityPrinter:
-        def __init__(self, cfg):
-                self.MinT = None
-                self.MaxT = None
-                self.Capacity = 0
-                self.FreeSpace = 0
-                self.NUp = 0
-                self.N10M = 0
-                self.N100M = 0
-                self.N1G = 0
-                self.NodeList = cfg.names('cell_class','*')
-                if not self.NodeList:   self.NodeList = []
-                self.NodeList.sort()
-                self.NextNode = 0
-                self.NodeDict = {}
-
-        def done(self):
-                for n in self.NodeList:
-                        # print n, self.NodeDict.has_key(n)
-                        if n not in self.NodeDict:
-                                return 0
-                return 1
-                                                
-        def pong(self, addr, cid, t, nw, nr, sts, capdct):
-                #print 'pong: %s' % cid, cid in self.NodeList
-                self.NUp = self.NUp + 1
-                for psan, caps in list(capdct.items()):
-                        cap, lfree, pfree = caps
-                        f = min(lfree, pfree)
-                        self.FreeSpace = self.FreeSpace + f
-                        self.Capacity = self.Capacity + cap
-                        if f >= 1024:
-                                self.N1G = self.N1G + 1
-                        if f >= 100:
-                                self.N100M = self.N100M + 1
-                        if f >= 10:
-                                self.N10M = self.N10M + 1
-                if cid == None:
-                        cid = gethostbyaddr(addr)[0]
-                self.NodeDict[cid] = 1
-                self.printCells()
-                
-        def printCells(self):
-                return
-                #while self.NextNode < len(self.NodeList) and \
-                #               self.NodeDict.has_key(self.NodeList[self.NextNode]):
-                #       cid = self.NodeList[self.NextNode]
-                #       self.NextNode = self.NextNode + 1
-                #       
-                #       t, nw, nr, sts = self.NodeDict[cid]
-                #       # del self.NodeDict[cid]
-                #       if t != None:
-                #               self.F.write(self.Format % (cid, int(t*1000 + 0.5), nw, nr, sts))
-                #       else:
-                #               self.F.write(self.DownFormat % cid)
-                #       #print 'Next node: %s, in dict: %d' % (
-                #       #       self.NodeList[self.NextNode], 
-                #       #       self.NodeDict.has_key(self.NodeList[self.NextNode]))
-
-        def close(self):
-                pass
-                #for cid in self.NodeList[self.NextNode:]:
-                #       try:    t, nw, nr, sts = self.NodeDict[cid]
-                #       except:
-                #               self.NDown = self.NDown + 1
-                #               self.F.write(self.DownFormat % cid)
-                #       else:
-                #               self.F.write(self.Format % (cid, int(t*1000 + 0.5), nw, nr, sts))                       
-                                
-        def getStats(self):
-                pass
-                #if self.NUp == 0:
-                #       return self.NUp, self.NDown, None, None, None, None, None
-                #return (self.NUp, self.NDown,
-                #       (self.MinT * 1000 + 0.5), 
-                #       (self.MaxT * 1000 + 0.5), 
-                #       (self.TimeSum/self.NUp * 1000 + 0.5),
-                #       self.NW, self.NR)
-
-
 def recursiveRemoveDir(c, path):
         sts, lst = c.listFiles(path)
         if sts != 'OK':
@@ -1084,547 +897,3 @@ def recursiveRemoveDir(c, path):
         return sts, err
 
                 
-if __name__ == '__main__':
-        from config import *
-        import sys
-        import getopt
-        
-        Usage = """
-Usage:    dfarm <command> <args>
-Commands: ls [-1] [-A|-a <attr>[,<attr>...]] [-s <attr>[,<attr>...]] 
-                   [<vfs dir>|<wildcard>]
-          info [-0] <vfs file>
-          get [-t <timeout>] [-v] <vfs file> <local file>
-          put [-t <timeout>] [-v] [-r] [-n <ncopies>] <local file> <vfs file>
-          rm(=del) [-r] (<vfs path>|<wildcard>) ...
-          mkdir <vfs path>
-          rmdir [-r] <vfs path> ...
-          chmod (r|-)(w|-)(r|-)(w|-) <vfs path>
-          setattr <vfs path> <attr> <value>
-          getattr <vfs path> <attr>
-          ln <local vfs file> <local file>
-          ping
-          stat <node>
-          usage <user>
-          hold/release <node> ...
-          repnode [-n <ncopies>] <node> ...
-          repfile [-n <ncopies>] <vfs file>
-          capacity [-mMGfcu]
-"""
-        
-        cfg = ConfigFile(os.environ['DFARM_CONFIG'])
-        c = DiskFarmClient(cfg)
-
-        if len(sys.argv) < 2:
-                print(Usage)
-                sys.exit(2)
-                                        
-        cmd = sys.argv[1]
-        args = sys.argv[2:]
-        
-        if cmd == 'ls' or cmd == 'list':
-                path_only = 0
-                all_attrs = 0
-                print_attr = []
-                select_attr = []
-                opts, args = getopt.getopt(args, '1Aa:s:')
-                for opt, val in opts:
-                        if opt == '-1':         path_only = 1
-                        elif opt == '-A':       all_attrs = 1
-                        elif opt == '-a':
-                                print_attr = val.split(',')
-                        elif opt == '-s':
-                                select_attr = val.split(',')
-
-                if not args:
-                        dir = '/'
-                        prefix = '/'
-                else:
-                        dir = args[0]
-                        prefix = ''
-
-                sts, lst = c.listFiles(dir)
-                if sts != 'OK':
-                        print(sts)
-                        sys.exit(1)
-
-                lst.sort(lambda x, y: cmp(x[0],y[0]))
-                for lp, t, info in lst:
-                        if select_attr:
-                                skip = 0
-                                for a in select_attr:
-                                        if not a in info.attributes():
-                                                skip = 1
-                                                break
-                                if skip:        continue
-                        lp = prefix + lp
-                        if t == 'd':
-                                lp = lp + '/'
-                        if path_only:   print(lp, end=' ')
-                        else:
-                                if t == 'd':
-                                        print('%1s%4s %3s %-16s %12s %14s %s' % (
-                                                t, info.Prot, '-', info.Username, '-', '', lp), end=' ')
-                                else:
-                                        size = info.Size
-                                        if info.sizeEstimated():
-                                                size = None
-                                        timstr = time.strftime('%m/%d %H:%M:%S', 
-                                                        time.localtime(info.CTime))
-                                        print('%1s%4s %3d %-16s %12s %14s %s' % (
-                                                t, info.Prot, info.mult(), info.Username,
-                                                long2str(size), timstr, lp), end=' ')
-                        if all_attrs:
-                                attrs = info.attributes()
-                                attrs.sort()
-                                for a in attrs:
-                                        v = info[a]
-                                        print('%s:%s' % (a,v), end=' ')
-                        elif print_attr:
-                                for a in print_attr:
-                                        v = info[a]
-                                        if v != None:
-                                                print('%s:%s' % (a,v), end=' ')
-                        print('')
-                                
-                sys.exit(0)
-
-        elif cmd == 'hold':
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                sts, reason = c.holdNodes(args)
-                if not sts:
-                        print(reason)
-                        sys.exit(1)
-                sys.exit(0)
-
-        elif cmd == 'release':
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                sts, reason = c.releaseNodes(args)
-                if not sts:
-                        print(reason)
-                        sys.exit(1)
-                sys.exit(0)
-
-        elif cmd == 'chmod':
-                if len(args) < 2:
-                        print(Usage)
-                        sys.exit(2)
-                sts, reason = c.chmod(args[1], args[0])
-                if not sts:
-                        print(reason)
-                        sys.exit(1)
-                sys.exit(0)             
-
-        elif cmd == 'setattr':
-                if len(args) < 2:
-                        print(Usage)
-                        sys.exit(2)
-                sts, reason = c.setAttr(args[0], args[1], args[2])
-                if not sts:
-                        print(reason)
-                        sys.exit(1)
-                sys.exit(0)             
-
-        elif cmd == 'usage':
-                # get usage statistics for the user
-                if not args:
-                        print(Usage)
-                        sys.exit(2)
-                usg, res, qta = c.getUsage(args[0])
-                if usg == None:
-                        # error
-                        print(qta)
-                        sys.exit(1)
-                print('Used: %s + Reserved: %s / Quota: %s (MB)' % \
-                        (long2str(usg), long2str(res), long2str(qta)))
-
-        elif cmd == 'get':
-                # get [-t <tmo>] lpath fn
-                try:    opts, args = getopt.getopt(args, 't:v')
-                except getopt.error as msg:
-                        print(msg)
-                        print(Usage)
-                        sys.exit(2)
-                if len(args) < 2:
-                        print(Usage)
-                        sys.exit(2)
-                tmo = 5*60
-                verbose = 0
-                for opt, val in opts:
-                        if opt == '-t': tmo = int(val)
-                        elif opt == '-v': verbose = 1
-                        
-                lpath = args[0]
-                dst = args[1]
-                info, err = c.getInfo(lpath)
-                if not info:
-                        print(err)
-                        sys.exit(1)
-                if info.Type != 'f':
-                        print('Is not a file')
-                        sys.exit(2)
-                try:
-                        st = os.stat(dst)
-                        if stat.S_ISDIR(st[stat.ST_MODE]):
-                                fn = lpath.split('/')[-1]
-                                dst = dst + '/' + fn
-                except:
-                        pass
-                sts, err = c.get(lpath, dst, info, tmo = tmo)
-                if not sts or verbose:
-                        print(err)
-                sys.exit(sts == 0)
-        
-        elif cmd == 'put':
-                if len(args) < 2:
-                        print(Usage)
-                        sys.exit(2)
-                ncopies = 1
-                verbose = 0
-                logpath = '/'
-                nolocal = 0
-                tmo = 5*60
-                
-                try:    opts, args = getopt.getopt(args, 't:n:rv')
-                except getopt.error as msg:
-                        print(msg)
-                        print(Usage)
-                        sys.exit(2)
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                
-                srclst = args
-                dst = '/'
-                if len(args) > 1:
-                        srclst = args[:-1]
-                        dst = args[-1]
-                        
-                if dst[0] != '/':
-                        dat = '/' + dst
-                dstisdir = c.isDir(dst)
-                if len(srclst) > 1 and not dstisdir:
-                        print('Destination must be a directory')
-                        sys.exit(1)
-
-                for opt, val in opts:
-                        if opt == '-n':
-                                ncopies = int(val)
-                        elif opt == '-v':
-                                verbose = 1
-                        elif opt == '-r':
-                                nolocal = 1
-                        elif opt == '-t':
-                                tmo = int(val)
-                status = 1
-                for src in srclst:
-                        try:    st = os.stat(src)
-                        except os.error as val:
-                                print('Error opening %s: %s' % (src, val.strerror))
-                                status = 0
-                                continue
-                        if stat.S_ISDIR(st[stat.ST_MODE]):
-                                print('Can not copy directory %s' % src)
-                                continue
-
-                        lpath = dst
-                        if dstisdir:
-                                fn = src.split('/')[-1]
-                                if not fn:
-                                        print('Invalid input file specification %s' % src)
-                                        continue
-                                lpath = '%s/%s' % (dst, fn)
-                                
-                        # put fn lpath
-                        info = c.fileInfo(lpath, src)
-                        lpath = info.Path
-                        info, err = c.createFile(info, ncopies)
-                        if not info:
-                                print('Error creating %s: %s' % (lpath, err))
-                                status = 0
-                                continue
-                        t0 = time.time()
-                        sts, err = c.put(src, lpath, info, ncopies, nolocal, tmo = tmo)
-                        status = sts
-                        if not sts or verbose:
-                                if len(srclst) > 1:
-                                        print('%s: %s' % (src, err))
-                                else:
-                                        print(err)
-                sys.exit(status == 0)
-
-        elif cmd == 'info':
-                # info lpath
-                try:    opts, args = getopt.getopt(args, '0')
-                except getopt.error as msg:
-                        print(msg)
-                        print(Usage)
-                        sys.exit(2)
-                print_info = 1
-                for opt, val in opts:
-                        if opt == '-0':
-                                print_info = 0
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                info, err = c.getInfo(args[0])
-                if not info:
-                        if print_info:
-                                print(err)
-                        sys.exit(1)
-                if print_info:
-                        print('Path: %s' % args[0])
-                        print('Type: %s' % info.Type)
-                        print('Owner: %s' % info.Username)
-                        print('Protection: %s' % info.Prot)
-                        print('Attributes:')
-                        for k in info.attributes():
-                                v = info[k]
-                                print('  %s = %s' % (k, info[k]))
-                        if info.Type == 'f':
-                                print('Created: %s' % time.ctime(info.CTime))
-                                print('Size: %s' % long2str(info.Size))
-                                print('Stored on: %s' % ','.join(info.Servers))
-                else:
-                        print(info.Type)
-                sys.exit(0)
-
-        elif cmd == 'getattr':
-                # getattr lpath attr
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                info, err = c.getInfo(args[0])
-                if not info:
-                        print(err)
-                        sys.exit(1)
-                val = info[args[1]]
-                if val == None:
-                        sys.exit(1)
-                print(val)
-                sys.exit(0)
-
-        elif cmd == 'del' or cmd == 'rm':
-                # [-r] lpath
-                recursive = 0
-                opts, args = getopt.getopt(args, 'r')
-                for opt, val in opts:
-                        if opt == '-r': recursive = 1
-
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                
-                for arg in args:
-                        if c.isDir(arg):
-                                if not recursive:       
-                                        sts, err = 0, '%s is a directory' % arg
-                                else:
-                                        sts, err = recursiveRemoveDir(c, arg)
-                        else:
-                                sts, err = c.delFile(args[0])
-                                if not sts and err[:2] == 'NF':
-                                        # try wildcard
-                                        sts, lst = c.listFiles(args[0])
-                                        if sts != 'OK':
-                                                err = sts
-                                        else:
-                                                if not lst:
-                                                        sts, err = 0, 'Not found'
-                                                else:
-                                                        sts, err = 1, ''
-                                                        for lp, t, info in lst:
-                                                                if t == 'd':
-                                                                        if recursive:
-                                                                                sts, err = recursiveRemoveDir(c, info.Path)
-                                                                                if not sts:
-                                                                                        break
-                                                                        else:
-                                                                                print('%s is not a file' % info.Path)
-                                                                else:
-                                                                        sts, err = c.delFile(info.Path)
-                                                                        if not sts:
-                                                                                print('Error deleting %s: %s' % (info.Path, err))
-                                                        if sts: err = ''
-                        if not sts:
-                                print(err)
-                                sys.exit(1)
-                sys.exit(0)
-
-        elif cmd == 'mkdir':
-                # info lpath
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                lpath = args[0]
-                info = c.dirInfo(lpath)
-                sts, err = c.makeDir(lpath, info)
-                if not sts:
-                        print(err)
-                        sys.exit(1)
-                sys.exit(0)
-
-        elif cmd == 'rmdir':
-                # [-r] lpath
-                recursive = 0
-                opts, args = getopt.getopt(args, 'r')
-                for opt, val in opts:
-                        if opt == '-r': recursive = 1
-
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-
-                for arg in args:
-                        if recursive:   
-                                sts, err = recursiveRemoveDir(c, arg)
-                        else:
-                                sts, err = c.delDir(arg)
-                        if not sts:
-                                print(err)
-                                sys.exit(1)
-                sys.exit(0)
-
-        elif cmd in ['repnodes','repnode']:
-                opts, args = getopt.getopt(args, 'n:')
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                mult = 1
-                for opt, val in opts:
-                        if opt == '-n':
-                                mult = int(val)
-                sts, err = c.replicateNodes(mult, args)
-                if not sts:
-                        print(err)
-                        sys.exit(1)
-                sys.exit(0)
-                
-        elif cmd == 'repfile':
-                opts, args = getopt.getopt(args, 'n:')
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                mult = 1
-                for opt, val in opts:
-                        if opt == '-n':
-                                mult = int(val)
-                if len(args) != 1:
-                        print(Usage)
-                        sys.exit(2)
-                sts, err = c.replicateFile(args[0], mult)
-                if not sts:
-                        print(err)
-                        sys.exit(1)
-                sys.exit(0)
-
-        elif cmd == 'ping':
-                pw = PingPrinter(cfg, sys.stdout, '%20s %5dms %4dw %4dr %s\n', '%20s -- not responding --\n')
-                lst = c.pingParallel(pw.pong, pw.done)
-                pw.close()
-                nup, ndown, mint, maxt, avgt, tput, tget = \
-                        pw.getStats()
-                if nup or ndown:
-                        print('--- %d/%d nodes up ---------------------------' % \
-                                (nup, nup+ndown))
-                        if nup:
-                                print('%20s %5s   %4dw %4dr' % ('total','',tput, tget))
-                                print('%20s %5dms' % ('min',mint))
-                                print('%20s %5dms' % ('avegare',avgt))
-                                print('%20s %5dms' % ('max',maxt))
-                sys.exit(0)
-
-        elif cmd == 'old_ping':
-                pw = PingPrinter(cfg, sys.stdout, '%20s %5dms %4dw %4dr %s\n', '%20s -- not responding --\n')
-                lst = c.ping(pw.pong, pw.done)
-                pw.close()
-                nup, ndown, mint, maxt, avgt, tput, tget = \
-                        pw.getStats()
-                if nup or ndown:
-                        print('--- %d/%d nodes up ---------------------------' % \
-                                (nup, nup+ndown))
-                        if nup:
-                                print('%20s %5s   %4dw %4dr' % ('total','',tput, tget))
-                                print('%20s %5dms' % ('min',mint))
-                                print('%20s %5dms' % ('avegare',avgt))
-                                print('%20s %5dms' % ('max',maxt))
-                sys.exit(0)
-
-        elif cmd == 'capacity':
-                pw = CapacityPrinter(cfg)
-                lst = c.pingParallel(pw.pong, pw.done)
-                pw.close()
-                opts, args = getopt.getopt(args, 'mMGfcu')
-                show_all = 1
-                show_u = 0
-                show_10 = 0
-                show_100 = 0
-                show_g = 0
-                show_f = 0
-                show_c = 0
-                for opt, val in opts:
-                        if opt == '-m':         show_all, show_10       =               (0, 1)
-                        if opt == '-M':         show_all, show_100      =               (0, 1)
-                        if opt == '-G':         show_all, show_g        =               (0, 1)
-                        if opt == '-f':         show_all, show_f        =               (0, 1)
-                        if opt == '-c':         show_all, show_c        =               (0, 1)
-                        if opt == '-u':         show_all, show_u        =               (0, 1)
-                if show_all or show_u:          print('Nodes up:            ', pw.NUp)
-                if show_all or show_10:         print('Nfree > 10M:         ', pw.N10M)
-                if show_all or show_100:        print('Nfree > 100M:        ', pw.N100M)
-                if show_all or show_g:          print('Nfree > 1G:          ', pw.N1G)
-                if show_all or show_f:          print('Total free (MB):     ', pw.FreeSpace)
-                if show_all or show_c:          print('Total capacity (MB): ', pw.Capacity)
-                sys.exit(0)
-
-        elif cmd == 'stat':
-                if len(args) < 1:
-                        print(Usage)
-                        sys.exit(2)
-                ci = c.cellInfo(args[0])
-                if ci == None:
-                        print('time-out')
-                        sys.exit(1)
-                print('%16s %10s %10s %10s %10s' % ('Area','Size','Used','Reserved','Free'))
-                print('%16s %10s %10s %10s %10s' % (16*'-',10*'-',10*'-',10*'-',10*'-',))
-                for psn, size, used, rsrvd, free in ci.PSAs:
-                        print('%16s %10d %10d %10d %10d' % (psn, size, used, rsrvd, free))
-                print('%8s %6s %8s' % ('Txn type', 'Status','VFS Path'))
-                print('%8s %6s %8s' % (8*'-', 6*'-', 8*'-'))
-                for tt, sts, lpath in ci.Txns:
-                        print('%8s %6s %s' % (tt, sts, lpath))
-                sys.exit(0)
-        elif cmd == 'ln':
-                if len(args) < 2:
-                        print(Usage)
-                        sys.exit(2)
-                info, err = c.getInfo(args[0])
-                if not info:
-                        print(err)
-                        sys.exit(1)
-                lpath = args[0]
-                dpath = c.localDataPath(lpath, info)
-                if not dpath:
-                        print('Time-out or non-local file')
-                        sys.exit(1)
-                dst = args[1]
-                try:
-                        st = os.stat(dst)
-                        if stat.S_ISDIR(st[stat.ST_MODE]):
-                                fn = lpath.split('/')[-1]
-                                dst = dst + '/' + fn
-                except:
-                        pass
-                try:
-                        os.symlink(dpath, dst)
-                except os.error as val:
-                        print(val)
-                        sys.exit(1)
-                sys.exit(0)
-        else:
-                print(Usage)
-                sys.exit(2)

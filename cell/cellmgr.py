@@ -55,7 +55,7 @@ from Selector import Selector
 from DataMover import DataMover
 from CellListener import CellListener
 from socket import *
-from config import ConfigFile
+from dfconfig import DFConfig
 from Timer import Timer
 from LogFile import LogFile
 import os
@@ -70,29 +70,32 @@ if __name__ == '__main__':
         sel = Selector()
         opts, args = getopt.getopt(sys.argv[1:], "c:")
         opts = dict(opts)
-        cfg = ConfigFile(opts.get("-c") or os.environ['DFARM_CONFIG'])
+        cfg = DFConfig(opts.get("-c"), 'DFARM_CONFIG')
         myid = gethostname()
-        domain = cfg.getValue('cell','*','domain','')
+        domain = cfg['cell'].get('domain','')
         dot_dom = '.' + domain
         ld = len(dot_dom)
         if myid[-ld:] == dot_dom:
                 myid = myid[:-ld]
-        myclass = cfg.getValue('cell_class','*',myid)
+        myid = myid.lower()
+        print("My id:", myid)
+        print("cell class config:", cfg["cell_class"])
+        myclass = cfg['cell_class'][myid]
+        print("My class:", myclass)
         if myclass == None:
                 print('Can not determine cell class. My ID = <%s>' % myid)
                 sys.exit(1)
-        logpath = cfg.getValueList('cell', myclass, 'log')
+        class_section = cfg['class:%s' % (myclass,)]
+        logpath = class_section['log']
         interval = '1d'
         if logpath:
-                if len(logpath) == 2:
+                if isinstance(logpath, list):
                         logpath, interval = tuple(logpath)
-                else:
-                        logpath = logpath[0]
                 cellmgr_global.LogFile = LogFile(logpath, interval)
-        cellmgr_global.DataMover = DataMover(myclass, cfg, sel)
-        cellmgr_global.CellStorage = CellStorageMgr(myid, myclass, cfg)
-        cellmgr_global.VFSSrvIF = VFSSrvIF(myid, cfg, sel)
-        cellmgr_global.CellListener = CellListener(myid, cfg, sel)
+        cellmgr_global.DataMover = DataMover(myclass, class_section, sel)
+        cellmgr_global.CellStorage = CellStorageMgr(myid, myclass, class_section)
+        cellmgr_global.VFSSrvIF = VFSSrvIF(myid, cfg["VFSServer"], sel)
+        cellmgr_global.CellListener = CellListener(myid, cfg["cell"], sel)
         cellmgr_global.Timer = Timer()
         cellmgr_global.CellListener.enable()
 

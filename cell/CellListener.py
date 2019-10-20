@@ -76,8 +76,8 @@ from py3 import to_str, to_bytes
 class   CellListener:
         def __init__(self, myid, cfg, sel):
                 self.MyID = myid
-                self.Port = cfg.getValue('cell', myid, 'listen_port')
-                self.FarmName = cfg.getValue('cell', myid, 'farm_name', '*')
+                self.Port = cfg['listen_port']
+                self.FarmName = cfg['farm_name']
                 self.Sock = socket(AF_INET, SOCK_DGRAM)
                 self.Sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 self.Sock.bind(('',self.Port))
@@ -182,8 +182,9 @@ class   CellListener:
                                 return None
                 ans = 'PONG %s %d %d %s' % (self.MyID, np, ng, 
                                 cellmgr_global.CellStorage.status())
+                print("sending pong:", ans)
                 try:    self.Sock.sendto(to_bytes(ans), retaddr)
-                except: pass
+                except: raise
                 return None
                         
         def doAccept(self, args, msg, addr, nolocal=0):

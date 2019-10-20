@@ -47,8 +47,6 @@ import sys
 import vfssrv_global
 import glob
 
-from py3 import to_str, to_bytes
-
 class   StorageCellConnection(TCPClientConnection):
                 def __init__(self, scif, sock, addr, sel):
                         self.SCIF = scif
@@ -66,8 +64,7 @@ class   StorageCellConnection(TCPClientConnection):
                                 sys.stdout.flush()
                         
                 def processMsg(self, cmd, args, msg):
-                        #raise ValueError("processMsg: %s %s" % (repr(cmd), args))
-                        msg = to_str(msg)
+                        print ("processMsg: cmd:", repr(cmd))
                         if self.Name:
                                 fcn = self.MsgDispatch[cmd]
                                 return fcn(self, cmd, args, msg)
@@ -188,12 +185,15 @@ class   CellHoldList:
 
 class   StorageCellIF(TCPServer):
         def __init__(self, cfg, sel):
+                self.Cfg = cfg
                 self.Port = cfg['cellif_port']
                 TCPServer.__init__(self, self.Port, sel)
                 self.Sock.listen(100)           # to be raplaced with
                                                                         # TCPServer.enableServer(backlog=100)
                 self.CellMap = {}
-                self.HoldList = CellHoldList(cfg['lock_dir'])
+                hold_dir = cfg['hold_dir']
+                self.HoldList = CellHoldList(hold_dir)
+                self.log('Hold list: %s' % ",".join(self.HoldList.list()))
 
         def nodeIsHeld(self, nname):
                 return self.HoldList.isHeld(nname)
