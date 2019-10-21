@@ -133,7 +133,7 @@ class   PutTxn(ULTxn):
                 self.PSA.receiveComplete(self.LPath, self.Info)
                 Transaction.commit(self, actSizeMB)
                 if self.NFRep > 0:
-                        cellmgr_global.DataMover.replicate(self.NFRep, self.dataPath(),
+                        cellmgr_global.DataServer.replicate(self.NFRep, self.dataPath(),
                                         self.LPath, self.Info)
 
         def isPutTxn(self):
@@ -364,7 +364,7 @@ class   PSA(HasTxns):
         def replicate(self, nfrep):
                 for lpath, info in self.listFiles():
                         if info != None:
-                                cellmgr_global.DataMover.replicate(nfrep, 
+                                cellmgr_global.DataServer.replicate(nfrep, 
                                         self.fullDataPath(lpath),
                                         lpath, info)
 
@@ -535,7 +535,7 @@ class   CellStorageMgr:
                 psa, info = self.findFile(lpath)
                 if psa == None or info == None:
                         return 0, 'File not found'
-                cellmgr_global.DataMover.replicate(nfrep, 
+                cellmgr_global.DataServer.replicate(nfrep, 
                         psa.fullDataPath(lpath),
                         lpath, info)
 

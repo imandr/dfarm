@@ -18,6 +18,7 @@
 
 CellStorage = None
 DataMover = None
+DataServer = None
 CellListener = None
 VFSSrvIF = None
 Timer = None

@@ -92,25 +92,15 @@ if __name__ == '__main__':
                 if isinstance(logpath, list):
                         logpath, interval = tuple(logpath)
                 cellmgr_global.LogFile = LogFile(logpath, interval)
-        cellmgr_global.DataMover = DataMover(myclass, class_section, sel)
-        cellmgr_global.CellStorage = CellStorageMgr(myid, myclass, class_section)
-        cellmgr_global.VFSSrvIF = VFSSrvIF(myid, cfg["VFSServer"], sel)
-        cellmgr_global.CellListener = CellListener(myid, cfg["cell"], sel)
-        cellmgr_global.Timer = Timer()
-        cellmgr_global.CellListener.enable()
-
-        cellmgr_global.Timer.addEvent(time.time() + 3, 3, None,
-                idle_tasks, None)
+        cellmgr_global.DataServer = data_server = DataServer(myclass, class_section)
+        cellmgr_global.CellStorage = cell_storage = CellStorageMgr(myid, myclass, class_section)
+        cellmgr_global.VFSSrvIF = vfs_srv_if = VFSSrvIF(myid, cfg["VFSServer"], cell_storage)
+        cell_listener = CellListener(myid, cfg["cell"], data_server, cell_storage, vfs_srv_if)
+        cell_listener.enable()
+        cell_listener.start()
+        
 
         if cellmgr_global.LogFile:
                 cellmgr_global.LogFile.log('Cell Manager started, pid=%d' % os.getpid())
 
-        while 1:
-                t1 = cellmgr_global.Timer.nextt()
-                while t1 == None or time.time() < t1:
-                        delta = 60
-                        if t1 != None:
-                                delta = max(0, t1 - time.time())
-                        sel.select(delta)
-                        t1 = cellmgr_global.Timer.nextt()
-                cellmgr_global.Timer.run()
+        cell_listener.join()
