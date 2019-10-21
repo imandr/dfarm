@@ -345,6 +345,90 @@ class   LocalRcvr:
                         self.Str.send(msg)
                 self.CSock.close()
                 self.Str = None
+                
+                
+class SocketSenderThread(Task):
+    
+        def __init__(self, caddr, lpath, ppath, delay):
+                self.CAddr = caddr
+                self.Delay = delay
+                self.PPath = ppath
+                self.LPath = lpath
+                
+        def log(self, msg):
+                msg = 'SocketSenderThread[lp=%s, c=%s, d=%s]: %s' % (
+                        self.LPath, self.CAddr, self.DAddr, msg)
+                if cellmgr_global.LogFile:
+                        cellmgr_global.LogFile.log(msg)
+                else:
+                        print(msg)
+                        sys.stdout.flush()
+                
+        def run(self):
+            if self.Delay and self.Delay > 0.0:
+                time.sleep(self.Delay)
+    
+            csock = socket(AF_INET, SOCK_STREAM)
+            try:    csock.connect(self.CAddr)
+            except:
+                    # probably too late
+                    self.log('ctl connect: %s %s' % (sys.exc_info()[0], sys.exc_info()[1]))
+                    csock.close()
+                    return
+                    
+            self.log('ctl connected')
+            stream = SockStream(self.CSock)
+            reply = stream.sendAndRecv('RECV')
+            if not reply or not reply.startswith("SENDTO "):
+                    self.log('bad reply on RECV: "%s"' % (reply,))
+                    csock.close()
+                    return
+                    
+            words = reply.split()
+            if len(words) < 3:
+                    self.log('bad reply on RECV: "%s"' % (reply,))
+                    csock.close()
+                    return
+                
+            addr = (words[1], int(words[2]))
+            dsock = socket(AF_INET, SOCK_STREAM)
+            try:    dsock.connect(addr)
+            except:
+                    self.log('can not connect to %s' % (addr,))
+                    csock.close()
+                    dsock.close()
+                    return
+
+            self.log("data socket connected to %s" % (addr,))
+            
+            try:
+                whith open(self.PPath,'rb') as f:
+                    done = False
+                    nbytes = 0
+                    while not done and not failed:
+                        try:    data = f.read(1024*1024*10)
+                        except: 
+                            failed = True
+                            break
+                        if not data:
+                                # end of file
+                                #self.Str.send('EOF %d' % (nbytes,))
+                                stream.send('EOF')
+                                #self.commit()
+                                done = True
+                        else:
+                            try:    
+                                dsock.sendall(data)
+                                nbytes += len(data)
+                            except: 
+                                failed = True
+            except Excepton as e:
+                self.log("trasnfer error: %s" % (e,))
+                
+            dsock.close()
+            csock.close()
+                
+    
                         
 class   SocketSndr:
         def __init__(self, txn, caddr, sel, delay):
