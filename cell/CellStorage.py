@@ -316,15 +316,6 @@ class   PSA(HasTxns):
                 return self.free() >= info.sizeMB() and self.attractor(info.dataClass()) > 0
 
         def receive(self, lpath, info):
-                # create new file, data (0 size) and info
-                # set file UID
-                # create txn
-                #try:   
-                #       pwrec = pwd.getpwnam(info.Username)
-                #       uid = pwrec[2]
-                #       gid = pwrec[3]
-                #except:
-                #       return None
                 dpath = self.fullDataPath(lpath)
                 try:    os.makedirs(self.dirPath(dpath), 0o711)
                 except: pass            # it may already exist
@@ -333,8 +324,6 @@ class   PSA(HasTxns):
                         os.close(os.open(dpath,os.O_CREAT, 0o744))
                 except:
                         return None
-                # self.storeFileInfo(lpath, info)
-                # set UID here
                 return PutTxn(info.sizeMB(), self, lpath, info)
 
         def receiveComplete(self, lpath, info):
@@ -475,22 +464,19 @@ class   CellStorageMgr:
                 # find available PSA
                 # allocate space there
                 # create and return the txn
-                #try:   pwd.getpwnam(info.Username)
-                #except: return 0
-                if self.IsHeld: return None, None
-                psa, dummy = self.findFile(lpath)
-                if psa != None:
-                        #print 'Aready have %s' % lpath
-                        return None, None               # already have it
-                if self.fileBeingReceived(lpath):
-                        #print 'File %s is being received' % lpath
+                if self.IsHeld or self.fileBeingReceived(lpath):
                         return None, None
+                psa, existing_info = self.findFile(lpath)
+                if psa != None:
+                    if existing_info.CTime >= info.CTime:
+                        return None, None
+                    psa.delFile(lpath)
                 psa = self.findPSA(lpath, info)
                 if psa:
-                        n = psa.Name
-                        self.PSAList.remove(n)
-                        self.PSAList.append(n)
-                        return psa.receive(lpath, info), psa.attractor(info.dataClass())
+                    n = psa.Name
+                    self.PSAList.remove(n)
+                    self.PSAList.append(n)
+                    return psa.receive(lpath, info), psa.attractor(info.dataClass())
                 return None, None
 
         def fileBeingReceived(self, lpath):
