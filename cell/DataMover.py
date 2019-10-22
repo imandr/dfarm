@@ -402,7 +402,7 @@ class SocketSenderThread(Task):
             self.log("data socket connected to %s" % (addr,))
             
             try:
-                whith open(self.PPath,'rb') as f:
+                with open(self.PPath,'rb') as f:
                     done = False
                     nbytes = 0
                     while not done and not failed:

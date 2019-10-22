@@ -4,10 +4,11 @@ from SockStream import SockStream
 import time
 import sys
 import random
+from pythreader import PyThread
 
 class   VFSSrvIF(PyThread):
         def __init__(self, myid, cfg, storage):
-                PyThread,.__init__(self)
+                PyThread.__init__(self)
                 self.ID = myid
                 self.DSAddr = (cfg['host'], cfg['cellif_port'])
                 self.Connected = 0
@@ -45,7 +46,6 @@ class   VFSSrvIF(PyThread):
                 return True
                 
         def reconcile(self):
-                if not self.Connected:  return False
                 for lp, info in self.CellStorage.listFiles():
                         #self.log('reconcile: %s %s' % (lp, info))
                         if info:
@@ -65,11 +65,13 @@ class   VFSSrvIF(PyThread):
                 if not self.connect():
                     time.sleep(0.5 + random.random())
                     continue
-                    
+                self.log("connected")
+                
                 if not self.reconcile():
                     self.disconnect()
                     time.sleep(0.5 + random.random())
                     continue
+                self.log("reconciled")
                     
                 eof = False
 

@@ -109,11 +109,14 @@ class   CellListener:
                 #print 'rcvd: <%s> from <%s>' % (msg, addr)
                 if not msg:     return
                 words = msg.split()
+                
                 if len(words) < 2:      return
+                
                 if words[1] != self.FarmName:   return
                 cmd = words[0]
                 args = words[2:]
                 ans = None
+                print ("CellListener.doRead: cmd: %s args: %s" % (cmd, args))
                 if cmd == 'ACCEPT':
                         ans = self.doAccept(args, msg, addr)
                 elif cmd == 'ACCEPTR':
@@ -159,7 +162,7 @@ class   CellListener:
                         str = str + '%s %d %d %d %d\n' % (
                                 psn, size, used, rsrvd, free)
                 str = str + '.\n'
-                str = str + cellmgr_global.DataMover.statTxns()
+                str = str + cellmgr_global.DataServer.statTxns()
                 retaddr = addr
                 if len(args) >= 2:
                         try:
@@ -172,8 +175,8 @@ class   CellListener:
 
         def doPing(self, args, msg, addr):
                 # PING <farm name> [<host> <port>]
-                np = cellmgr_global.DataMover.putTxns()
-                ng = cellmgr_global.DataMover.getTxns()
+                np = cellmgr_global.DataServer.putTxns()
+                ng = cellmgr_global.DataServer.getTxns()
                 retaddr = addr
                 if len(args) >= 2:
                         try:
@@ -189,6 +192,7 @@ class   CellListener:
                         
         def doAccept(self, args, msg, addr, nolocal=0):
                 # ACCEPT <farm name> <nfrep> <lpath> <addr> <port> <info>
+                print("doAccept(%s, %s, %s, %s)" % (args, msg, addr, nolocal))
                 if not cellmgr_global.VFSSrvIF.Reconciled:
                         return None
                 if nolocal and self.clientIsLocal(addr):
@@ -201,8 +205,8 @@ class   CellListener:
                 lp = args[1]
                 sock_addr = (args[2], int(args[3]))
                 info = VFSFileInfo(lp, args[4])
-                if not cellmgr_global.DataMover.canReceive(lp):
-                        #print 'DataMover can not receive'
+                if not cellmgr_global.DataServer.canReceive(lp):
+                        #print 'DataServer can not receive'
                         return None
                 txn, attrc = cellmgr_global.CellStorage.receiveFile(lp, info)
                 if txn == None:
@@ -213,7 +217,7 @@ class   CellListener:
                 if not self.clientIsLocal(addr) and not nolocal:
                         delay = delay + 0.5
                 delay = max(0.0, delay)
-                cellmgr_global.DataMover.recvSocket(txn, sock_addr, delay)
+                cellmgr_global.DataServer.recvSocket(txn, sock_addr, delay)
                 return None
                 
         def doSend(self, args, msg, addr, nolocal=0):
@@ -224,7 +228,7 @@ class   CellListener:
                 lp = args[0]
                 ct = int(args[1])
                 sock_addr = (args[2], int(args[3]))
-                if not cellmgr_global.DataMover.canSend(lp):
+                if not cellmgr_global.DataServer.canSend(lp):
                         #print 'Mover can not send'
                         return None
                 psa,info = cellmgr_global.CellStorage.findFile(lp)
@@ -233,9 +237,9 @@ class   CellListener:
                         return None
                 txn = cellmgr_global.CellStorage.sendFile(lp)
                 if not nolocal and self.clientIsLocal(addr):
-                        cellmgr_global.DataMover.sendLocal(txn, sock_addr, 0.0)
+                        cellmgr_global.DataServer.sendLocal(txn, sock_addr, 0.0)
                 else:
-                        cellmgr_global.DataMover.sendSocket(txn, sock_addr, 0.5)
+                        cellmgr_global.DataServer.sendSocket(txn, sock_addr, 0.5)
                 return None
 
         def ____timerEvent(self, t, args):
@@ -251,7 +255,7 @@ class   CellListener:
                 lp = args[0]
                 ct = int(args[1])
                 sock_addr = (args[2], int(args[3]))
-                if not cellmgr_global.DataMover.canOpenFile(lp, mode):
+                if not cellmgr_global.DataServer.canOpenFile(lp, mode):
                         #print 'Mover can not send'
                         return None
                 mode = args[4]
@@ -262,5 +266,5 @@ class   CellListener:
                 txn = cellmgr_global.CellStorage.openFile(lp, mode)
                 if not self.clientIsLocal(addr):
                         time.sleep(0.5)
-                cellmgr_global.DataMover.openFile(txn, sock_addr, info, mode)
+                cellmgr_global.DataServer.openFile(txn, sock_addr, info, mode)
                 return None

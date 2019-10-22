@@ -7,6 +7,7 @@ import os
 import time
 import cellmgr_global
 import select
+from pythreader import Task, synchronized, Primitive, TaskQueue
 
 class FileMover(Task):
     
@@ -62,11 +63,12 @@ class FileMover(Task):
                 raise RuntimeError('bad DATA message: "%s"' % (msg,))
 
             daddr = (words[1], int(words[2]))
+            self.log("data address: %s" % (daddr,))
             try:    
-                dsock = connectSocket(daddr)
-            except:
+                dsock = self.connectSocket(daddr)
+            except Exception as e:
                 csock.close()
-                raise RuntimeError("data socket connection failure")
+                raise RuntimeError("data socket connection failure: %s" % (e,))
             
             return stream, csock, dsock
 
@@ -75,18 +77,16 @@ class FileMover(Task):
                 time.sleep(self.Delay)
     
             try:    cstream, csock, dsock = self.init_transfer(self.CAddr)
-            except: 
-                return self.failed("failed to initiate the transfer")
+            except Exception as e: 
+                return self.failed("failed to initiate the transfer: %s" % (e,))
             
-            self.log("data socket connected to %s" % (addr,))
+            self.log("transfer initialized with remote data socket %s" % (dsock.getsockname(),))
             
             try:    nbytes = self.transfer(cstream, csock, dsock)
             except Exception as e:
                 return self.failed("transfer failed: %s" % (e,))
             finally:
-                dsock.shitdown(SHUT_RDWR)
                 dsock.close()
-                csock.shitdown(SHUT_RDWR)
                 csock.close()
 
             self.succeeded()
@@ -108,7 +108,7 @@ class SocketSender(FileMover):
             
             nbytes = 0
 
-            whith open(self.Txn.dataPath(),'rb') as f:
+            with open(self.Txn.dataPath(),'rb') as f:
                 done = False
                 while not done:
                     data = f.read(1024*1024*10)
@@ -117,13 +117,15 @@ class SocketSender(FileMover):
                     else:
                         dsock.sendall(data)
                         nbytes += len(data)
-                        
+            dsock.close()
+            self.log("senfing EOF...")
             ok = cstream.sendAndRecv("EOF %d" % (nbytes,))
+            self.log("response to EOF: %s" % (ok,))
             if ok != "OK":
                 self.log("Expected OK from the sender, got '%s'" % (ok,))         
             return nbytes
 
-class SocketReceiver(Task):
+class SocketReceiver(FileMover):
     
         def __str__(self):
                 return 'SocketReceiver[lp=%s, c=%s]' % (
@@ -133,7 +135,8 @@ class SocketReceiver(Task):
 
             nbytes = 0
     
-            whith open(self.Txn.dataPath(),'wb') as f:
+            with open(self.Txn.dataPath(),'wb') as f:
+                done = False
                 while not done:
                     data = dsock.recv(1024*1024*10)
                     if not data:
@@ -154,29 +157,24 @@ class SocketReceiver(Task):
             return nbytes
 
 
-class   DataServer(PyThread):
+class   DataServer(Primitive):
         def __init__(self, myid, cfg):
-                HasTxns.__init__(self)
-                self.Cfg = cfg
-                self.MyID = myid
-                self.MaxGet = cfg.get('max_get',3)
-                self.MaxPut = cfg.get('max_put',1)
-                self.MaxRep = cfg.get('max_rep',2)
-                self.MaxTxn = cfg.get('max_txn',5)
-                
-                self.GetMovers = TaskQueue(self.MaxGet)
-                self.PutMovers = TaskQueue(self.MaxPut)
-                self.RepMovers = TaskQueue(self.MaxRep)
-                
-                self.ReplicatorsToRetry = []
-                
-        @synchronized
-        def txnCount(self):
-            return len(self.GetMovers.activeTasks()) + len(self.PutMovers.activeTasks()) \
-                    + len(self.RepMovers.activeTasks())
+            Primitive.__init__(self)
+            self.Cfg = cfg
+            self.MyID = myid
+            self.MaxGet = cfg.get('max_get',3)
+            self.MaxPut = cfg.get('max_put',1)
+            self.MaxRep = cfg.get('max_rep',2)
+            self.MaxTxn = cfg.get('max_txn',5)
             
+            self.GetMovers = TaskQueue(self.MaxGet)
+            self.PutMovers = TaskQueue(self.MaxPut)
+            self.RepMovers = TaskQueue(self.MaxRep)
+            
+            self.ReplicatorsToRetry = []
+                
         def log(self, msg):
-                msg = 'DataMover: %s' % msg
+                msg = 'DataServer: %s' % msg
                 if cellmgr_global.LogFile:
                         cellmgr_global.LogFile.log(msg)
                 else:
@@ -186,9 +184,9 @@ class   DataServer(PyThread):
         @synchronized
         def canSend(self, lpath):
                 if self.txnCount() >= self.MaxTxn or \
-                                        len(self.self.GetMovers.activeTasks()) >= self.MaxGet:
+                                        self.getTxns() >= self.MaxGet:
                         return False
-                for t in self.self.PutMovers.activeTasks() + self.self.PutMovers.waitingTasks():
+                for t in self.PutMovers.activeTasks() + self.PutMovers.waitingTasks():
                         if t.LPath == lpath:
                                 return False
                 return True                        
@@ -196,9 +194,9 @@ class   DataServer(PyThread):
         @synchronized
         def canReceive(self, lpath):
                 if self.txnCount() >= self.MaxTxn or \
-                                        len(self.self.PutMovers.activeTasks()) >= self.MaxPut:
+                                        self.putTxns() >= self.MaxPut:
                         return False
-                for t in self.self.PutMovers.activeTasks() + self.self.PutMovers.waitingTasks():
+                for t in self.PutMovers.activeTasks() + self.PutMovers.waitingTasks():
                         if t.LPath == lpath:
                                 return False
                 return True                        
@@ -214,7 +212,7 @@ class   DataServer(PyThread):
 
         def recvSocket(self, txn, caddr, delay):
                 self.GetMovers.addTask(SocketReceiver(txn, caddr, delay))
-
+                
         """ comment out
         def sendLocal(self, txn, caddr, delay):
                 txn.notify(self)
@@ -236,57 +234,28 @@ class   DataServer(PyThread):
                 
         def putTxns(self):
                 #print 'putTxns: %d' % self.txnCount('U')
-                return self.txnCount('U')
+                return len(self.PutMovers.activeTasks())
                 
         def getTxns(self):
                 #print 'getTxns: %d' % self.txnCount('D')
-                return self.txnCount('D')
+                return len(self.GetMovers.activeTasks())
                 
-        def replicate(self, nfrep, lfn, lpath, info):
-                if nfrep > 2:
-                        # make 2 replicators
-                        n1 = nfrep/2
-                        n2 = nfrep - n1
-                        r = Replicator(self.Cfg, lfn, lpath, info, n1, self.Sel)
-                        #self.log('replicator created: %s' % r)
-                        self.Replicators.append(r)
-                        r = Replicator(self.Cfg, lfn, lpath, info, n2, self.Sel)
-                        #self.log('replicator created: %s' % r)
-                        self.Replicators.append(r)
-                elif nfrep > 0:
-                        r = Replicator(self.Cfg, lfn, lpath, info, nfrep, self.Sel)
-                        self.Replicators.append(r)
-                        #self.log('replicator created: %s' % r)
-
-        def idle(self):
-                nactive = 0
-                for r in self.Replicators:
-                        if r.isInProgress():
-                                nactive = nactive + 1
-                if nactive < self.MaxRep:
-                        for r in self.Replicators:
-                                if not r.isInProgress() and r.Retry and not r.Done:
-                                        if time.time() > r.RetryAfter:
-                                                r.init()
-                                                nactive = nactive + 1
-                                                if nactive >= self.MaxRep:
-                                                        break
-                newlst = []
-                for r in self.Replicators:
-                        if not r.Done and (r.isInProgress() or r.Retry):
-                                newlst.append(r)
-                self.Replicators = newlst
-
+        @synchronized
+        def txnCount(self):
+            return self.getTxns() + self.putTxns()
+            
         def statTxns(self):
-                str = ''
-                for t in self.txnList():
-                        if t.type() == 'U':
-                                str = str + 'WR * %s\n' % t.LPath
-                        elif t.type() == 'D':
-                                str = str + 'RD * %s\n' % t.LPath
-                for r in self.Replicators:
-                        sts = '*'
-                        if not r.isInProgress():
-                                sts = 'I'
-                        str = str + 'RP %s %s\n' % (sts, r.LogPath)
-                return str + '.\n'
+            pending, active = self.GetMovers.tasks()
+            stats = [
+                "RD * %s" % (x.LogPath,) for x in active
+            ] + [
+                "RD I %s" % (x.LogPath,) for x in pending
+            ]
+            pending, active = self.PutMovers.tasks()
+            stats += [
+                "WR * %s" % (x.LogPath,) for x in active
+            ] + [
+                "WR I %s" % (x.LogPath,) for x in pending
+            ]
+
+            return "\n".join(stats)
