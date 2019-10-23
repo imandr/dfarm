@@ -97,6 +97,7 @@ class FileMover(Task):
             
         def succeeded(self):
             self.Txn.commit()
+            self.log("tracsaction committed")
                 
 class SocketSender(FileMover):
     

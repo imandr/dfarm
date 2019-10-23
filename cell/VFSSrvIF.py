@@ -43,6 +43,7 @@ class   VFSSrvIF(PyThread):
                                 self.log('Shot down by VFS Server')
                                 sys.exit(3)
                         return False
+                self.Connected = True
                 return True
                 
         def reconcile(self):
@@ -127,10 +128,12 @@ class   VFSSrvIF(PyThread):
                 self.NextProbeTime = time.time() + 300
 
         def sendIHave(self, lpath, info):
+                self.log("sendIHave...")
                 if self.Connected:
                         sizestr = '%s' % info.Size
                         if sizestr[-1] == 'L':
                                 sizestr = sizestr[:-1]
                         self.Str.send('IHAVE %s %s %s' % (lpath, info.CTime, sizestr))
+                        self.log("sent IHAVE %s %s" % (lpath, info.CTime))
                         
 
