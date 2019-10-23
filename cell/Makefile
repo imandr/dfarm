@@ -1,7 +1,7 @@
 BINFILES = CellListenerThread.py    Replicator.py      cellmgr.sh \
 	CellStorage.py     VFSSrvIF.py        cellmgr_global.py \
 	DataServer.py       cellmgr.py         txns.py \
-	Repeater.py repeater.sh
+	Repeater.py repeater.sh ReplcationManager.py
 
 build: $(DSTBIN)
 	cp $(BINFILES) $(DSTBIN)
