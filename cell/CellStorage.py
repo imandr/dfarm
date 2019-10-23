@@ -468,9 +468,9 @@ class   CellStorageMgr:
                         return None, None
                 psa, existing_info = self.findFile(lpath)
                 if psa != None:
-                    if existing_info.CTime >= info.CTime:
+                    #if existing_info.CTime >= info.CTime:
                         return None, None
-                    psa.delFile(lpath)
+                    #psa.delFile(lpath)
                 psa = self.findPSA(lpath, info)
                 if psa:
                     n = psa.Name
