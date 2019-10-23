@@ -13,7 +13,7 @@ DSTDIRS = $(DSTBIN) $(DSTLIB) $(DSTUPS) $(DSTDOC) $(TARDIR)
 
 UPSTAR = $(TARDIR)/dfarm_$(VERSION).tar
 
-all: clean build tarfile
+all: clean makedirs build tarfile
 
 build:
 	cd cell;	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
