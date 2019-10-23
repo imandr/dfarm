@@ -63,6 +63,7 @@ import errno
 import time
 import tdb
 import fnmatch
+from pythreader import Primitive
 
 class   _Cache:
         def __init__(self, low, high, autoflush_level = 0):
@@ -274,23 +275,24 @@ class   VFSFileLister:
                 self.PathList = self.PathList[len(lst):]
                 return lst
 
-class   VFSDB:
+class   VFSDB(Primitive):
 
         FlushInterval = 600
         __DirInfoKey = '..info..'
         __DirIndexName = 'index.db'
         
         def __init__(self, root):
-                self.Root = root
-                self.Cache = VFSCache(self)             # lpath -> (entry_time, type, info)
-                self.CellInxDB = CellIndexDB(self.Root + '/.cellinx')
-                self.LastFlush = 0
-                self.Debug = 0
-                if self.getDirInfo('/') == None:
-                        info = VFSDirInfo('/')
-                        info.Prot = 'rwrw'
-                        info.Username = 'root'
-                        self.storeDirInfo(info)
+            Primitive.__init__(self)
+            self.Root = root
+            self.Cache = VFSCache(self)             # lpath -> (entry_time, type, info)
+            self.CellInxDB = CellIndexDB(self.Root + '/.cellinx')
+            self.LastFlush = 0
+            self.Debug = 0
+            if self.getDirInfo('/') == None:
+                    info = VFSDirInfo('/')
+                    info.Prot = 'rwrw'
+                    info.Username = 'root'
+                    self.storeDirInfo(info)
                 
         def debug(self, str):
                 if self.Debug:  print(str)
@@ -415,6 +417,7 @@ class   VFSDB:
                                         lst.append((fn, 'd', info))
                 return lst
 
+        @synchronized
         def listDir(self, dir, ptrn = '*'):
                 # always returns list of relative paths
                 dir = VFSCanonicPath(dir)
@@ -434,6 +437,7 @@ class   VFSDB:
                 db.close()
                 return lst1
 
+        @synchronized
         def listCellFiles(self, cname):
                 return self.CellInxDB[cname].files()
 
@@ -447,6 +451,7 @@ class   VFSDB:
                                 inx[lpath] = info.CTime
                 return carry
                 
+        @synchronized
         def recreateCellInxDB(self):
                 dict = {}
                 self.walkTreeRec('/', 0, self.cellInxWalk, dict, None)
@@ -462,6 +467,7 @@ class   VFSDB:
                 nfiles = nfiles + 1
                 return nfiles           
 
+        @synchronized
         def fileInventory(self, quotamgr):
                 dict = {}
                 quotamgr.initInventory()
@@ -518,6 +524,7 @@ class   VFSDB:
                         db.close()
                 return t, info          
 
+        @synchronized
         def writeItem(self, lpath, data):
                 typ, info = data
                 if info.Type == 'f':
@@ -533,7 +540,7 @@ class   VFSDB:
                                 
         def getType(self, lpath):
                 t, info = self.Cache[lpath]
-                self.debug('getType(%s) -> %s' % (lpath, t))
+                #self.debug('getType(%s) -> %s' % (lpath, t))
                 return t
 
         def getFileInfo(self, lpath):
@@ -556,6 +563,7 @@ class   VFSDB:
         def storeDirInfo(self, info):
                 self.Cache[info.Path] = ('d',info)
 
+        @synchronized
         def addServer(self, info, cellname):
                 if info.Type != 'f':    return
                 if not info.isStoredOn(cellname):
@@ -566,6 +574,7 @@ class   VFSDB:
                                 inx.addFile(info.Path, info.CTime)
                                 self.CellInxDB[cellname] = inx
 
+        @synchronized
         def removeServer(self, info, cellname):
                 if info.Type != 'f':    return
                 if info.isStoredOn(cellname):
@@ -576,6 +585,7 @@ class   VFSDB:
                                 inx.removeFile(info.Path)
                                 self.CellInxDB[cellname] = inx
         
+        @synchronized
         def mkfile(self, info):
                 lpath = info.Path
                 fn = self.fileName(lpath)
@@ -595,6 +605,7 @@ class   VFSDB:
                         return 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
                 return 1, 'OK'
                 
+        @synchronized
         def mkdir(self, info):
                 lpath = info.Path
                 fn = self.fileName(lpath)
@@ -613,6 +624,7 @@ class   VFSDB:
                         return 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
                 return 1, 'OK'
 
+        @synchronized
         def rmfile(self, lpath):
                 if not self.exists(lpath):
                         return 1, 'Already deleted'
@@ -629,6 +641,7 @@ class   VFSDB:
                 del self.Cache[lpath]
                 return 1, 'OK'
 
+        @synchronized
         def rmdir(self, lpath):
                 try:    
                         os.remove(self.dirIndexPath(lpath))
@@ -652,6 +665,7 @@ class   VFSDB:
                         self.flush()
                         self.LastFlush = time.time()
 
+        @synchronized
         def flush(self):
                 self.Cache.flush()
                 self.CellInxDB.flush()
