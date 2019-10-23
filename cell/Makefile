@@ -1,6 +1,6 @@
 BINFILES = CellListener.py    Replicator.py      cellmgr.sh \
 	CellStorage.py     VFSSrvIF.py        cellmgr_global.py \
-	DataMover.py       cellmgr.py         txns.py \
+	DataServer.py       cellmgr.py         txns.py \
 	Repeater.py repeater.sh
 
 build: $(DSTBIN)

@@ -1,58 +1,3 @@
-#
-# @(#) $Id: VFSDB.py,v 1.14 2003/12/09 16:33:29 ivm Exp $
-#
-# $Log: VFSDB.py,v $
-# Revision 1.14  2003/12/09 16:33:29  ivm
-# Fixed bug with rmdir
-#
-# Revision 1.12  2003/11/25 20:37:02  ivm
-# Implemented write-back cache
-#
-# Revision 1.11  2003/03/25 17:36:46  ivm
-# Implemented non-blocking directory listing transmission
-# Implemented single inventory walk-through
-# Implemented re-tries on failed connections to VFS Server
-#
-# Revision 1.10  2003/01/30 17:33:11  ivm
-# .
-#
-# Revision 1.9  2002/08/12 16:29:43  ivm
-# Implemented cell indeces
-# Kerberized ftpd
-#
-# Revision 1.8  2002/04/30 20:07:16  ivm
-# Implemented and tested:
-#       node replication
-#       node hold/release
-#
-# Revision 1.7  2001/10/12 21:12:02  ivm
-# Fixed bug with double-slashes
-# Redone remove-on-put
-# Implemented log files
-#
-# Revision 1.6  2001/06/15 19:54:25  ivm
-# Implemented full cell-vfsdb synchronization
-# Implemented "ln"
-#
-# Revision 1.5  2001/05/30 20:34:28  ivm
-# Implemented new QuotaManager
-# Fixed bug in Replicator.abort()
-# Increased Replication and api.get() time-outs
-#
-# Revision 1.4  2001/05/08 22:17:46  ivm
-# Fixed some bugs
-#
-# Revision 1.3  2001/04/24 16:44:59  ivm
-# Implemented "dummy" client authentication and permission validation
-#
-# Revision 1.2  2001/04/23 22:21:12  ivm
-# Implemented quota, file ownership and protection
-#
-# Revision 1.1  2001/04/04 14:25:48  ivm
-# Initial CVS deposit
-#
-#
-
 import os
 import stat
 from VFSFileInfo import *
@@ -63,7 +8,7 @@ import errno
 import time
 import tdb
 import fnmatch
-from pythreader import Primitive
+from pythreader import Primitive, synchronized
 
 class   _Cache:
         def __init__(self, low, high, autoflush_level = 0):
