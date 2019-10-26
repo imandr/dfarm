@@ -1,7 +1,6 @@
 import os
 import stat
 from VFSFileInfo import *
-import glob
 import sys
 import vfssrv_global
 import errno
@@ -19,6 +18,9 @@ class   _Cache:
 
         def has_key(self, key):
                 return key in self._Dict
+
+        def keys(self):
+                return self._Dict.keys()
                 
         def __getitem__(self, key):
                 if key in self._Dict:
@@ -80,11 +82,18 @@ class   VFSCache(_Cache):
         def __delitem__(self, key):
                 _Cache.__delitem__(self, VFSCanonicPath(key))
 
+        def clearUnder(self, key):
+                key = VFSCanonicPath(key)
+                for k in list(self.keys())[:]:
+                        if k.startswith(key):
+                                del self[k]
+
         def readItem(self, key):
                 return self.DB.readItem(key)
                 
         def writeItem(self, key, val):
                 return self.DB.writeItem(key, val)              
+
 
 class   CellIndex(Logged):
         def __init__(self, cellname):
@@ -237,7 +246,7 @@ class   VFSDB(Primitive, Logged):
                         prepath = prepath + '/'
                 nfiles = 0
                 ndirs = 0
-                for rpath, typ, info in self.glob2(start):
+                for rpath, typ, info in self.glob(start):
                         apath = prepath + rpath
                         carry = fcn(apath, typ, info, arg, carry)
                         if typ == 'd':
@@ -255,7 +264,7 @@ class   VFSDB(Primitive, Logged):
                         carry = self.walkTreeRec(subdir, downfirst, fcn, arg, carry)
                 return carry
 
-        def glob2(self, dirp, ptrn = '*'):
+        def glob(self, dirp, ptrn = '*'):
                 dirp = VFSCanonicPath(dirp)
                 for name, typ, info in self.DB.listItems(dirp):
                         if name[0] != '.' and fnmatch.fnmatch(name, ptrn):
@@ -265,9 +274,6 @@ class   VFSDB(Primitive, Logged):
                                         info = VFSDirInfo(dirp + '/' + name, info)
                                 yield name, typ, info
         
-        listDir = glob2
-        glob1 = glob2
-
         @synchronized
         def listCellFiles(self, cname):
                 return self.CellInxDB[cname].files()
@@ -339,21 +345,21 @@ class   VFSDB(Primitive, Logged):
 
         def getFileInfo(self, lpath):
                 tup = self.Cache[lpath]
-                if tup is None:	return None
+                if tup is None: return None
                 t, info = tup
                 if t != 'f':    return None
                 return info
 
         def getDirInfo(self, lpath):
                 tup = self.Cache[lpath]
-                if tup is None:	return None
+                if tup is None: return None
                 t, info = tup
                 if t != 'd':    return None
                 return info
 
         def getInfo(self, lpath):
                 tup = self.Cache[lpath]
-                if tup is None:	return None
+                if tup is None: return None
                 t, info = tup
                 return info
         
@@ -432,25 +438,31 @@ class   VFSDB(Primitive, Logged):
                 del self.Cache[lpath]
                 return 1, 'OK'
 
+        def _rmdir_rec(self, path):
+                if path == '/': return          # do not delete root
+                self.DB.deleteItemsUnder(path, typ='f')
+                for name, typ, _ in self.DB.listItems(path):
+                        assert typ == 'd'
+                        self._rmdir_rec(path + "/" + name)
+                self.DB.deleteItemsUnder(path, typ='d')
+
         @synchronized
-        def rmdir(self, lpath):
-                try:    
-                        os.remove(self.dirIndexPath(lpath))
-                except:
-                        return 0, 'Error removing directory index file: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
-
-                try:    
-                        os.rmdir(self.fullPath(lpath))
-                except os.error as val:
-                        if val.errno == errno.EEXIST:
-                                return 0, 'Directory not empty'
-                        else:
-                                return 0, val.strerror          
-                except: 
-                        return 0, 'Error removing the directory: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
-                del self.Cache[lpath]
-                return 1, 'OK'
-
+        def rmdir(self, lpath, recursive=False):
+                if lpath == '/':        return
+                assert self.getType(lpath) == 'd'
+                if recursive:
+                        self._rmdir_rec(lpath)
+                else:
+                        empty = True
+                        for _ in self.DB.listItems(lpath):
+                                empty = False
+                                break
+                        if not empty:
+                                return False, "Directory %s is not empty" % (lpath,)
+                self.DB.delItem(lpath)
+                self.Cache.clearUnder(lpath)
+                return True, "OK"
+                
         def idle(self):
             pass
             #    if time.time() > self.LastFlush + self.FlushInterval:

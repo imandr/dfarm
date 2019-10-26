@@ -217,7 +217,7 @@ class   VFSClientConnection(TCPClientConnection, Logged):
                         else:
                                 if info.Prot[2] != 'r':
                                         return 'PERM Permission denied'
-                nlist = vfssrv_global.G_VFSDB.glob1(lpath, '*')
+                nlist = vfssrv_global.G_VFSDB.glob(lpath, '*')
                 lister = VFSFileLister(vfssrv_global.G_VFSDB, self.Str, lpath, nlist)
                 self.Str.send('OK')
                 self.Selector.register(lister, wr=self.ClientSocket.fileno())

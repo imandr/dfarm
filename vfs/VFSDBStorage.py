@@ -60,7 +60,29 @@ class VFSDBStorage(Primitive):
         return typ
 
     @synchronized
+    def delItemsUnder(self, path, typ='f'):
+        c = self.DB.cursor()
+        c.execute("delete from vfs where dpath=? and type=?", (path, typ))
+        self.DB.commit()
+        
+    @synchronized
     def delItem(self, path):
+        if path == '/.':        return  # do not delete root
+        if type(path) == 'd':
+                empty = True
+                for _ in self.listItems(path):
+                        empty = False
+                        break
+                if not empty:
+                        raise RuntimeError("Directory %s not empty" % (path,))
+        parent, key = self.split_path(path)
+        c = self.DB.cursor()
+        c.execute("delete from vfs where dpath=? and key = ?", (parent, key))
+        self.DB.commit()
+    
+
+    @synchronized
+    def delItem(self, path, recursive=True):
         if type(path) == 'd':
                 empty = True
                 for _ in self.listItems(path):

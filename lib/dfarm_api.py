@@ -345,6 +345,27 @@ class   DiskFarmClient:
                         return 0, ans
                 return 1, 'OK'
 
+        def recursiveRemoveDir(self, path):
+                sts, lst = self.listFiles(path)
+                if sts != 'OK':
+                        return 0, sts
+                subdirs = []
+                for lp, t, info in lst:
+                        fpath = path + '/' + lp
+                        if t == 'd':    subdirs.append(fpath)
+                        else:
+                                #print 'deleting %s' % fpath
+                                sts, err = self.delFile(fpath)
+                                if not sts:
+                                        return sts, 'Error deleting %s: %s' % (fpath, err)
+                #print 'subdirs: ', subdirs
+                for subdir in subdirs:
+                        sts, err = self.recursiveRemoveDir(subdir)
+                        if not sts:
+                                return sts, err
+                sts, err = self.delDir(path)
+                return sts, err
+
         def makeDir(self, lpath, info):
                 self.connect()
                 ans = self.DStr.sendAndRecv('MD %s %s' % (lpath, info.serialize()))
@@ -568,26 +589,5 @@ def long2str(x):
         if str[-1] == 'L':
                 str = str[:-1]
         return str
-
-def recursiveRemoveDir(c, path):
-        sts, lst = c.listFiles(path)
-        if sts != 'OK':
-                return 0, sts
-        subdirs = []
-        for lp, t, info in lst:
-                fpath = path + '/' + lp
-                if t == 'd':    subdirs.append(fpath)
-                else:
-                        #print 'deleting %s' % fpath
-                        sts, err = c.delFile(fpath)
-                        if not sts:
-                                return sts, 'Error deleting %s: %s' % (fpath, err)
-        #print 'subdirs: ', subdirs
-        for subdir in subdirs:
-                sts, err = recursiveRemoveDir(c, subdir)
-                if not sts:
-                        return sts, err
-        sts, err = c.delDir(path)
-        return sts, err
 
                 

@@ -589,7 +589,7 @@ elif cmd == 'rmdir':
 
         for arg in args:
                 if recursive:   
-                        sts, err = recursiveRemoveDir(c, arg)
+                        sts, err = c.recursiveRemoveDir(arg)
                 else:
                         sts, err = c.delDir(arg)
                 if not sts:
