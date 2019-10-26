@@ -1,70 +1,25 @@
-#
-# @(#) $Id: CellIF.py,v 1.9 2002/08/16 19:18:28 ivm Exp $
-#
-# Cell Manager interface to VFS DB
-#
-# $Log: CellIF.py,v $
-# Revision 1.9  2002/08/16 19:18:28  ivm
-# Implemented size estimates for ftpd
-#
-# Revision 1.8  2002/08/12 16:29:43  ivm
-# Implemented cell indeces
-# Kerberized ftpd
-#
-# Revision 1.7  2002/04/30 20:07:15  ivm
-# Implemented and tested:
-#       node replication
-#       node hold/release
-#
-# Revision 1.6  2001/10/12 21:12:02  ivm
-# Fixed bug with double-slashes
-# Redone remove-on-put
-# Implemented log files
-#
-# Revision 1.5  2001/06/15 19:54:25  ivm
-# Implemented full cell-vfsdb synchronization
-# Implemented "ln"
-#
-# Revision 1.4  2001/05/30 20:34:28  ivm
-# Implemented new QuotaManager
-# Fixed bug in Replicator.abort()
-# Increased Replication and api.get() time-outs
-#
-# Revision 1.3  2001/05/08 22:17:46  ivm
-# Fixed some bugs
-#
-# Revision 1.2  2001/04/23 22:21:12  ivm
-# Implemented quota, file ownership and protection
-#
-# Revision 1.1  2001/04/04 14:25:48  ivm
-# Initial CVS deposit
-#
-#
-
 from TCPServer import *
 from TCPClientConnection import *
 import sys
 import vfssrv_global
 import glob
+from logs import Logged
 
-class   StorageCellConnection(TCPClientConnection):
+class   StorageCellConnection(TCPClientConnection, Logged):
                 def __init__(self, scif, sock, addr, sel):
                         self.SCIF = scif
                         TCPClientConnection.__init__(self, sock, addr, sel)
                         self.Name = None
                         self.Synchronized = 0
                         self.FileList = {}
+                        self.CAddr = addr
+                        self.debug("connection created")
 
-                def log(self, msg):
-                        msg = 'CellIF[%s]: %s' % (self.Name, msg)
-                        if vfssrv_global.G_LogFile:
-                                vfssrv_global.G_LogFile.log(msg)
-                        else:
-                                print(msg)
-                                sys.stdout.flush()
-                        
+                def __str__(self):
+                    return "CellIF[%s@%s]" % (self.Name, self.CAddr)
+
                 def processMsg(self, cmd, args, msg):
-                        print ("processMsg: cmd:", repr(cmd))
+                        self.debug("processMsg: cmd:%s args:%s" % (cmd, args))
                         if self.Name:
                                 fcn = self.MsgDispatch[cmd]
                                 return fcn(self, cmd, args, msg)
@@ -84,9 +39,17 @@ class   StorageCellConnection(TCPClientConnection):
                                         return 'HOLD'
                                 else:
                                         return 'OK'
-
+                                        
                 def doIHave(self, cmd, args, msg):
-                        # IHAVE <path> <ctime> [<size>]
+                    # msg: IHAVE <path> <ctime> <size>,...
+                    ihave, args = msg.split(" ", 1)
+                    assert ihave == "IHAVE"
+                    lst = args.split(",")
+                    for finfo in lst:
+                        self.processSingleIHave(finfo.split())
+
+                def processSingleIHave(self, args):
+                        # <path> <ctime> [<size>]
                         if len(args) < 2:
                                 return 'ERR Syntax error: <%s>' % msg
                         lpath = args[0]
@@ -97,7 +60,7 @@ class   StorageCellConnection(TCPClientConnection):
                         actSize = None
                         if len(args) > 2:
                                 actSize = int(args[2])
-                        self.log(msg)
+                        self.log("singeIHave: %s %s %s" % (lpath, ct, actSize))
                         info = vfssrv_global.G_VFSDB.getFileInfo(lpath)
                         if info == None or info.CTime != ct:
                                 self.log('Out-of-date %s' % lpath)
@@ -183,7 +146,7 @@ class   CellHoldList:
         def list(self):
                 return list(self.Dict.keys())
 
-class   StorageCellIF(TCPServer):
+class   StorageCellIF(TCPServer, Logged):
         def __init__(self, cfg, sel):
                 self.Cfg = cfg
                 self.Port = cfg['cellif_port']
@@ -198,14 +161,6 @@ class   StorageCellIF(TCPServer):
         def nodeIsHeld(self, nname):
                 return self.HoldList.isHeld(nname)
 
-        def log(self, msg):
-                msg = 'CellIF: %s' % (msg,)
-                if vfssrv_global.G_LogFile:
-                        vfssrv_global.G_LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
-                        
         def deleteCellConnection(self, nname):
                 self.log('cell disconnected: %s' % nname)
                 try:    del self.CellMap[nname]
@@ -219,6 +174,7 @@ class   StorageCellIF(TCPServer):
                 return nname in self.CellMap
                 
         def createClientInterface(self, sock, addr, sel):
+                self.debug("createClientInterface: addr=%s" % (addr,))
                 StorageCellConnection(self, sock, addr, sel)            
 
         def delFile(self, lpath, cells):

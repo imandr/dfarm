@@ -64,10 +64,11 @@
 from TCPServer import *
 from TCPClientConnection import *
 from VFSFileInfo import *
-from VFSDB import VFSFileLister
+from VFSDB2 import VFSFileLister
 import sys
 import vfssrv_global
 import time
+from logs import Logged
 
 def _long2str(x):
         str = '%s' % x
@@ -75,7 +76,7 @@ def _long2str(x):
                 str = str[:-1]
         return str
 
-class   VFSClientConnection(TCPClientConnection):
+class   VFSClientConnection(TCPClientConnection, Logged):
         MAX_DIR_TO_SEND = 100
         def __init__(self, usrv, sock, addr, sel):
                 self.USrv = usrv
@@ -87,13 +88,9 @@ class   VFSClientConnection(TCPClientConnection):
                 self.Username = None
                 self.DirList = None
 
-        def log(self, msg):
-                msg = 'VFSClient[%s@%s]: %s' % (self.Username, self.ClientAddr, msg)
-                if vfssrv_global.G_LogFile:
-                        vfssrv_global.G_LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
+        def __str__(self):
+            return "VFSClient[%s@%s]" % (self.Username, self.ClientAddr)
+
 
         def doWrite(self, fd, sel):
                 if fd != self.ClientSocket.fileno():    return
@@ -548,21 +545,13 @@ class   VFSClientConnection(TCPClientConnection):
                 #self.log('connection closed')                          
                 pass
 
-class   VFSServer(TCPServer):
+class   VFSServer(TCPServer, Logged):
         def __init__(self, cfg, sel):
                 self.Cfg = cfg
                 self.Port = cfg['api_port']
                 TCPServer.__init__(self, self.Port, sel)
                 lst = []
                 self.AdminList = cfg.get('admins', [])
-
-        def log(self, msg):
-                msg = 'VFSServer: %s' % (msg,)
-                if vfssrv_global.G_LogFile:
-                        vfssrv_global.G_LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
 
         def isAdmin(self, user):
                 return user in self.AdminList

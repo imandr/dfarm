@@ -91,7 +91,7 @@ class   Replicator:
                 self.ResendBcastEvent = None
 
         def __str__(self):
-                return '<Replicator[%s -> %s *%s]>' %\
+                return 'Replicator[%s -> %s *%s]' %\
                         (self.LocalFN, self.LogPath, self.NRep)
                         
         def log(self, msg):

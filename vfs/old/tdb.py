@@ -6,7 +6,7 @@ class TDB(object):
     def __init__(self, f):
         self.F = f
         self.Items = self.read()
-        print (self.Items)
+        #print (self.Items)
 
     @staticmethod        
     def open(path, create=False):
@@ -31,7 +31,7 @@ class TDB(object):
     def save(self):
         data = [to_bytes("%s %s" % (k, v)) for k, v in self.Items.items()]
         self.F.seek(0)
-        print ("data:", data)
+        #print ("data:", data)
         self.F.write(b'\n'.join(data))
         self.F.truncate()
         
@@ -46,13 +46,13 @@ class TDB(object):
         return items
     
     def close(self):
-        print ("closed")
+        #print ("closed")
         if self.F is not None:
             self.F.close()
             self.F = None
             
     def __del__(self):
-        print ("__del__", self.F)
+        #print ("__del__", self.F)
         if self.F is not None:
             self.close()
 

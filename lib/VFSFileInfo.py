@@ -38,7 +38,7 @@ def VFSCanonicPath(path):
 		path = '/' + path
 	while '//' in path:
 		path = path.replace('//', '/')
-	if path.endswith('/'):
+	if path != "/" and path.endswith('/'):
 		path = path[:-1]
 	return path		
 

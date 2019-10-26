@@ -1,8 +1,9 @@
 from pythreader import Task, TaskQueue, synchronized, Primitive
 from DataClient import DataClient
+from logs import Logged
 import os, time
 
-class   Replicator(Task):
+class   Replicator(Task, Logged):
     def __init__(self, fn, lpath, info, nrep, dclient, rmanager):
         Task.__init__(self)
         self.Manager = rmanager
@@ -11,6 +12,9 @@ class   Replicator(Task):
         self.FileInfo = info
         self.NRep = nrep
         self.DClient = dclient
+
+    def __str__(self):
+        return "Replicator[%s *%d]" % (self.LogPath, self.NRep)
         
     def reinit(self):
         pass
@@ -26,12 +30,15 @@ class   Replicator(Task):
         else:
             self.Manager.retry(self)
 
-class ReplicationManager(Primitive):
+class ReplicationManager(Primitive, Logged):
     
     def __init__(self, cfg):
         self.Replicators = TaskQueue(cfg.get('max_rep',2))
-        self.DClient = DataClient(cfg["farm_name"], (cfg["broadcast"], cfg["listen_port"]))
-        
+        self.DClient = DataClient(
+            (cfg["broadcast"], cfg["listen_port"]),
+            cfg["farm_name"]
+        )
+
     def replicate(self, nfrep, lfn, lpath, info):
             if nfrep > 2:
                     # make 2 replicators

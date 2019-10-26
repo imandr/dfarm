@@ -2,10 +2,11 @@ from socket import *
 from VFSFileInfo import *
 from pythreader import PyThread
 import cellmgr_global
+from logs import Logged
 
 from py3 import to_str, to_bytes
 
-class   CellListener(PyThread):
+class   CellListener(PyThread, Logged):
         def __init__(self, myid, cfg, data_server, cell_storage, vfs_server_if):
                 PyThread.__init__(self)
                 self.MyID = myid
@@ -20,13 +21,6 @@ class   CellListener(PyThread):
                 self.CellStorage = cell_storage
                 self.VFSSrvIF = vfs_server_if
                 
-        def log(self, msg):
-                msg = 'CellListener: %s' % msg
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
         def enable(self):
                 self.Enabled = True
                 self.wakeup()

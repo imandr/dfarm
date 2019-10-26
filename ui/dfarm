@@ -454,7 +454,7 @@ elif cmd == 'put':
                         print('Error creating %s: %s' % (lpath, err))
                         status = 0
                         continue
-                print("VFS entry created:", info)
+                #print("VFS entry created:", info)
                 t0 = time.time()
                 sts, err = c.put(src, lpath, info, ncopies, nolocal, tmo = tmo)
                 status = sts

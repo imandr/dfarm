@@ -5,8 +5,9 @@ import time
 import sys
 import random
 from pythreader import PyThread
+from logs import Logged
 
-class   VFSSrvIF(PyThread):
+class   VFSSrvIF(PyThread, Logged):
         def __init__(self, myid, cfg, storage):
                 PyThread.__init__(self)
                 self.ID = myid
@@ -16,23 +17,16 @@ class   VFSSrvIF(PyThread):
                 self.LastIdle = 0
                 self.NextReconnect = 0
                 self.NextProbeTime = 0
-                self.connect()
+                #self.connect()
                 self.CellStorage = storage
         
-        def log(self, msg):
-                msg = 'VFSSrvIF: %s' % (msg,)
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
-                                
         def connect(self):
                 self.Sock = socket(AF_INET, SOCK_STREAM)
                 try:    self.Sock.connect(self.DSAddr)
                 except: 
                         self.log('can not connect to VFS Server')
                         return False
+                self.debug("connected as %s" % (self.Sock.getsockname(),))
                 self.Str = SockStream(self.Sock)
                 ans = self.Str.sendAndRecv('HELLO %s' % self.ID)
                 self.log('connect: HELLO -> %s' % ans)
@@ -46,18 +40,24 @@ class   VFSSrvIF(PyThread):
                 self.Connected = True
                 return True
                 
+        def batchedFileList(self, nfull=100):
+            batch = []
+            for lp, info in self.CellStorage.listFiles():
+                if info:
+                    batch.append(info)
+                    if len(batch) >= nfull:
+                        yield batch
+                        batch = []
+            if len(batch):
+                yield batch
+                
         def reconcile(self):
-                for lp, info in self.CellStorage.listFiles():
-                        #self.log('reconcile: %s %s' % (lp, info))
-                        if info:
-                                sizestr = '%s' % info.Size
-                                if sizestr[-1] == 'L':
-                                        sizestr = sizestr[:-1]
-                                ct = info.CTime
-                                self.log('reconcile: sending IHAVE %s %s %s' % (lp, ct, sizestr))
-                                self.Str.send('IHAVE %s %s %s' % (lp, ct, sizestr))
-                self.Str.send('SYNC')
-                return True
+            for batch in self.batchedFileList():
+                if batch:
+                    lines = ("%s %s %d" % (info.Path, info.CTime, info.Size) for info in batch)
+                    self.Str.send("IHAVE %s" % (','.join(lines),))
+            self.Str.send('SYNC')
+            return True
                 
         def run(self):
         

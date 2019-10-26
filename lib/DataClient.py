@@ -66,7 +66,7 @@ class DataClient(object):
         try:    peer_ctl_sock, peer_ctl_addr, peer_data_sock, peer_data_addr = self.init_transfer(bcast, info, tmo)
         except Exception as e:
             return False, "Error initiating transfer: %s" % (e,)
-        print("transfer initialized")
+        #print("transfer initialized")
         ok, reason = self._remote_put(peer_ctl_sock, peer_ctl_addr, peer_data_sock, peer_data_addr, ppath, tmo)
 
         peer_ctl_sock.close()
@@ -87,16 +87,16 @@ class DataClient(object):
             while not eof:
                     data = fd.read(60000)
                     if not data:
-                            print ("_remote_put: eof")
+                            #print ("_remote_put: eof")
                             eof = True
                     else:
                             peer_data_sock.sendall(data)
                             nbytes += len(data)
-                            print ("_remote_put: sent %d bytes" % (len(data),))
+                            #print ("_remote_put: sent %d bytes" % (len(data),))
         t1 = time.time()
         peer_data_sock.shutdown(SHUT_RDWR)
         peer_data_sock.close()
-        print ("_remote_put: sending EOF...")
+        #print ("_remote_put: sending EOF...")
         answer = ctl_str.sendAndRecv('EOF %d' % (nbytes,))
         done = answer == "OK"
         size = float(nbytes)/1024.0/1024.0
@@ -134,25 +134,25 @@ class DataClient(object):
             peer_data_sock.settimeout(tmo)
         with open(ppath, 'wb') as fd:
             while not eof:
-                    print("_remote_get: peer_data_sock.recv()...")
+                    #print("_remote_get: peer_data_sock.recv()...")
                     data = peer_data_sock.recv(1024*1024)
-                    print("_remote_get: peer_data_sock.recv() -> %d" % (len(data),))
+                    #print("_remote_get: peer_data_sock.recv() -> %d" % (len(data),))
                     if not data:
                             eof = True
                     else:
                             fd.write(data)
                             nbytes += len(data)
-        print("_remote_get: EOF")
+        #print("_remote_get: EOF")
         peer_data_sock.close()
         t1 = time.time()
         msg = ""
         try:
             msg = ctl_str.recv()
-            print("_remote_get: EOF message: [%s]" % (msg,))
+            #print("_remote_get: EOF message: [%s]" % (msg,))
             words = msg.split()
             assert words[0] == "EOF"
             count = int(words[1])
-            print("_remote_get: EOF received: %d" % (count,))
+            #print("_remote_get: EOF received: %d" % (count,))
             ctl_str.send("OK")
         except:
             return False, "Can not parse EOF message: [%s]" % (msg,) 

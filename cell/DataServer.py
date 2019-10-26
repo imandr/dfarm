@@ -8,23 +8,16 @@ import time
 import cellmgr_global
 import select
 from pythreader import Task, synchronized, Primitive, TaskQueue
+from logs import Logged
 
-class FileMover(Task):
+class FileMover(Task, Logged):
     
         def __init__(self, txn, caddr, delay):
                 Task.__init__(self)
                 self.CAddr = caddr
                 self.Delay = delay
                 self.Txn = txn
-                
-        def log(self, msg):
-                msg = '%s: %s' % (self, msg)
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
-                
+
         def connectSocket(self, addr, tmo = None):
                 # returns either connected socket or None on timeout
                 # None means infinite
@@ -102,7 +95,7 @@ class FileMover(Task):
 class SocketSender(FileMover):
     
         def __str__(self):
-                return 'SocketSender[lp=%s, c=%s]' % (
+                return 'SocketSender[lp=%s -> c=%s]' % (
                         self.Txn.LPath, self.CAddr)
                 
         def transfer(self, cstream, csock, dsock):
@@ -129,7 +122,7 @@ class SocketSender(FileMover):
 class SocketReceiver(FileMover):
     
         def __str__(self):
-                return 'SocketReceiver[lp=%s, c=%s]' % (
+                return 'SocketReceiver[lp=%s <- c=%s]' % (
                         self.Txn.LPath, self.CAddr)
 
         def transfer(self, cstream, csock, dsock):
@@ -158,7 +151,7 @@ class SocketReceiver(FileMover):
             return nbytes
 
 
-class   DataServer(Primitive):
+class   DataServer(Primitive, Logged):
         def __init__(self, myid, cfg):
             Primitive.__init__(self)
             self.Cfg = cfg
@@ -173,15 +166,7 @@ class   DataServer(Primitive):
             self.RepMovers = TaskQueue(self.MaxRep)
             
             self.ReplicatorsToRetry = []
-                
-        def log(self, msg):
-                msg = 'DataServer: %s' % msg
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
-                
+
         @synchronized
         def canSend(self, lpath):
                 if self.txnCount() >= self.MaxTxn or \

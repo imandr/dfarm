@@ -6,18 +6,16 @@ import sys
 import vfssrv_global
 import errno
 import time
-import tdb
+from VFSDBStorage import VFSDBStorage
 import fnmatch
 from pythreader import Primitive, synchronized
 from logs import Logged
 
 class   _Cache:
-        def __init__(self, low, high, autoflush_level = 0):
+        def __init__(self, low, high):
                 self._Low = low
                 self._High = high
                 self._Dict = {}                 # key -> (access_time, val)
-                self._DirtyKeys = {}
-                self._AutoFlush = autoflush_level
 
         def has_key(self, key):
                 return key in self._Dict
@@ -28,8 +26,9 @@ class   _Cache:
                         self.touch(key)         # renew
                 else:
                         v = self.readItem(key)
-                        self._Dict[key] = (int(time.time()), v)
-                        self.cleanUp()
+                        if v is not None:
+                            self._Dict[key] = (int(time.time()), v)
+                            self.cleanUp()
                 return v
 
         def touch(self, k):
@@ -38,29 +37,18 @@ class   _Cache:
                 
         def __setitem__(self, key, val):
                 self._Dict[key] = (int(time.time()), val)
-                self._DirtyKeys[key] = 1
-                self.cleanUp()                  
+                self.writeItem(key, val)
+                self.cleanUp()
 
         def __delitem__(self, key):
                 try:    del self._Dict[key]
                 except: pass
-                try:    del self._DirtyKeys[key]
-                except: pass
 
         def cleanUp(self):
-                if len(self._DirtyKeys) > self._AutoFlush:
-                        self.flush()
                 if len(self._Dict) < self._High:        return
                 lst = list(self._Dict.items())
-                lst.sort(lambda x,y: y[1][0] - x[1][0])
-                self._Dict = {}
-                for key, x in lst[:self._Low]:
-                        self._Dict[key] = x
-
-        def flush(self):
-                for k in list(self._DirtyKeys.keys()):
-                        self.writeItem(k, self._Dict[k][1])
-                self._DirtyKeys = {}
+                lst = sorted(lst, key=lambda x: x[1][0])
+                self._Dict = dict(lst[:self._Low])
 
         # overridables
         def readItem(self, key):
@@ -76,21 +64,14 @@ class   VFSCache(_Cache):
         CacheWriteBackLimit = 0
 
         def __init__(self, db):
-                _Cache.__init__(self, self.CacheLow, self.CacheHigh, self.CacheWriteBackLimit)
+                _Cache.__init__(self, self.CacheLow, self.CacheHigh)
                 self.DB = db
 
         def has_key(self, key):
                 return _Cache.has_key(self, VFSCanonicPath(key))
                 
         def __getitem__(self, key):
-                #if self.DB.Debug:
-                #       if self.has_key(key):
-                #               #print '__getitem__(%s): in cache' % key
-                #       else:
-                #               #print '__getitem__(%s): not in cache' % key
                 v = _Cache.__getitem__(self, VFSCanonicPath(key))
-                #if self.DB.Debug:
-                #       print '__getitem__: value=%s' % (v,)
                 return v
                 
         def __setitem__(self, key, val):
@@ -158,8 +139,7 @@ class CellIndexDB(_Cache, Logged):
 
         def __init__(self, root):
                 self.Root = root
-                _Cache.__init__(self, self.CacheLow, self.CacheHigh, 
-                                self.CacheWriteBackLimit)
+                _Cache.__init__(self, self.CacheLow, self.CacheHigh)
 
         def readItem(self, cname):
                 inx = CellIndex(cname)
@@ -180,14 +160,13 @@ class CellIndexDB(_Cache, Logged):
                 return '%s/%s.inx' % (self.Root, cname)
 
 class   VFSFileLister(Logged):
-        def __init__(self, db, str, prefix, lst):
+        def __init__(self, db, str, prefix, iterable):
                 self.DB = db
                 self.Str = str
                 self.PathPrefix = prefix
                 if not self.PathPrefix or self.PathPrefix[-1] != '/':
                         self.PathPrefix = self.PathPrefix + '/'
-                self.PathList = lst
-                self.PathList.sort()
+                self.PathList = sorted(list(iterable))      # list of tuples: (name, type, info)
 
         def isEmpty(self):
                 return len(self.PathList) == 0
@@ -200,33 +179,18 @@ class   VFSFileLister(Logged):
                 lst = self.getNext()
                 msglst = []
                 #self.DB.Debug=1
-                for lp in lst:
-                        lpath = self.PathPrefix + lp
-                        typ = ''
-                        if self.DB.isFile(lpath):
-                                info = self.DB.getFileInfo(lpath)
-                                typ = 'f'
-                        elif self.DB.isDir(lpath):
-                                info = self.DB.getDirInfo(lpath)
-                                typ = 'd'
-                        else:
-                                continue
-                        #print 'Lister: type for %s is %s' % (lp, typ)
+                for lp, typ, info in lst:
                         msglst.append('%s %s %s' % (lp, typ, info.serialize()))
                 #self.DB.Debug=0
                 self.Str.send(msglst)
                 
-        def getNext(self, n=10):
+        def getNext(self, n=100):
                 lst = self.PathList[:n]
                 self.PathList = self.PathList[len(lst):]
                 return lst
 
 class   VFSDB(Primitive, Logged):
 
-        FlushInterval = 600
-        __DirInfoKey = '..info..'
-        __DirIndexName = 'index.db'
-        
         def __init__(self, root):
             Primitive.__init__(self)
             self.Root = root
@@ -234,33 +198,15 @@ class   VFSDB(Primitive, Logged):
             self.CellInxDB = CellIndexDB(self.Root + '/.cellinx')
             self.LastFlush = 0
             self.Debug = 0
-            if self.getDirInfo('/') == None:
-                    info = VFSDirInfo('/')
-                    info.Prot = 'rwrw'
-                    info.Username = 'root'
-                    self.storeDirInfo(info)
-                    self.debug("created / entry")
+            
+            info = VFSDirInfo('/')
+            info.Prot = 'rwrw'
+            info.Username = 'root'
+            self.DB = VFSDBStorage(self.Root + "/vfs.db", info.serialize())
+            self.FlushInterval = 30.0
+            
+            self.debug("root info: %s" % (self.getDirInfo('/'),))
                 
-        def fileInfoPath(self, lpath):
-                return self.fullPath(lpath)
-
-        def fullPath(self, lpath):
-                if not lpath or lpath[0] != '/':
-                        lpath = '/' + lpath
-                return self.Root + lpath
-
-        def dirIndexPath(self, lpath):
-                if not lpath or lpath[0] != '/':
-                        lpath = '/' + lpath
-                return self.Root + lpath + '/' + self.__DirIndexName
-                
-        def logPath(self, fpath):
-                tail = fpath[len(self.Root):]
-                if not tail:    tail = '/'
-                if self.fileName(tail) == self.__DirIndexName:
-                        tail = self.parentPath(tail)
-                return tail
-
         def parentPath(self, path):
                 dp = '/'.join(path.split('/')[:-1])
                 if not dp:      dp = '/'
@@ -309,77 +255,18 @@ class   VFSDB(Primitive, Logged):
                         carry = self.walkTreeRec(subdir, downfirst, fcn, arg, carry)
                 return carry
 
-        def glob(self, ptrn):
-                # returns unsorted list of absolute logical paths matching the pattern
-                dirptrn = self.parentPath(ptrn)
-                fnptrn = self.fileName(ptrn)
-                dirlst = glob.glob(self.fullPath(dirptrn))
-                dirlst = [x for x in dirlst if not '/.' in x]
-                lst = []
-                for dp in map(lambda x, s=self: s.logPath(x), dirlst):
-                        lst = lst + list(map(lambda x, d=dp: d + '/' + x,
-                                        self.glob1(dp, fnptrn)))
-                return lst
-                
-        def glob1(self, dirp, ptrn):
-                # returns unsorted list of items in the directory matching the pattern
-                db = tdb.open(self.dirIndexPath(dirp))
-                lst = list(db.keys())
-                db.close()
-                #print 'glob1: lst1(%d): %s...' % (len(lst), lst[:5])
-                lst = list(filter(lambda fn, pt=ptrn, s=self: fn != s.__DirInfoKey and 
-                                fnmatch.fnmatch(fn, pt),
-                                lst))
-                #print 'glob1: lst2(%d): %s...' % (len(lst), lst[:5])
-                fullp = self.fullPath(dirp)
-                for fn in glob.glob1(fullp, '*'):
-                        if not fn or fn[0] == '.':      continue
-                        st = os.stat(fullp + '/' + fn)
-                        if stat.S_ISDIR(st[stat.ST_MODE]):
-                                lst.append(fn)
-                #print 'glob1: lst3(%d): ...%s' % (len(lst), lst[-5:])
-                return lst
-
         def glob2(self, dirp, ptrn = '*'):
-                #print 'glob2: opening %s' % dirp
-                db = tdb.open(self.dirIndexPath(dirp))
-                files = list(filter(lambda fn, pt=ptrn, s=self: fn != s.__DirInfoKey and 
-                                        fnmatch.fnmatch(fn, pt), list(db.keys())))
-                lst = []
-                for fn in files:
-                        info = VFSFileInfo(dirp + '/' + fn, db[fn])
-                        lst.append((fn, 'f', info))
-                db.close()
-                fullp = self.fullPath(dirp)
-                for fn in glob.glob1(fullp, '*'):
-                        if not fn or fn[0] == '.':      continue
-                        st = os.stat(fullp + '/' + fn)
-                        if stat.S_ISDIR(st[stat.ST_MODE]):
-                                lp = dirp + '/' + fn
-                                info = self.getDirInfo(lp)
-                                if info != None:
-                                        lst.append((fn, 'd', info))
-                return lst
-
-        @synchronized
-        def listDir(self, dir, ptrn = '*'):
-                # always returns list of relative paths
-                dir = VFSCanonicPath(dir)
-                lst1 = []
-                db = tdb.open(self.dirIndexPath(dir))
-                for fn in self.glob1(dir, ptrn):
-                        lpath = dir + '/' + fn
-                        typ = self.getType(lpath)
-                        info = None
-                        if typ == 'f':
-                                info = VFSFileInfo(lpath, db[fn])
-                        elif typ == 'd':
-                                info = self.getDirInfo(lpath)
-                        # remove dir from fn
-                        lst1.append((fn, typ, info))
-                #print 'listDir(%s, %s): lst1(%d): %s' % (dir, ptrn, len(lst1), lst1[:5])
-                db.close()
-                return lst1
+                dirp = VFSCanonicPath(dirp)
+                for name, typ, info in self.DB.listItems(dirp):
+                        if name[0] != '.' and fnmatch.fnmatch(name, ptrn):
+                                if typ == 'f':
+                                        info = VFSFileInfo(dirp + '/' + name, info)
+                                else:
+                                        info = VFSDirInfo(dirp + '/' + name, info)
+                                yield name, typ, info
+        
+        listDir = glob2
+        glob1 = glob2
 
         @synchronized
         def listCellFiles(self, cname):
@@ -433,72 +320,41 @@ class   VFSDB(Primitive, Logged):
                 return self.getType(lpath) != None
 
         def readItem(self, lpath):
-                t = None
-                info = None
-                #self.debug('readItem(%s)...' % (lpath,))
-
-                try:
-                        fpath = self.fullPath(lpath)
-                        st = os.stat(fpath)
-                        if stat.S_ISDIR(st[stat.ST_MODE]):      t = 'd'
-                except:
-                        # it's a file
-                        t = 'f'
-                        #self.debug('readItem: stat(%s): %s %s' % (fpath, sys.exc_type, sys.exc_value))
-                        pass
-                        
-                #self.debug('readItem: type for <%s> is %s' % (lpath, t))
-                if t == 'f':
-                        try:    
-                                db = tdb.open(self.dirIndexPath(self.parentPath(lpath)))
-                                str = db[self.fileName(lpath)]
-                        except:
-                                #self.debug('readItem: db key for %s not found' % (lpath,))
-                                return None, None
-                        info = VFSFileInfo(lpath, str)
-                        db.close()
-                elif t == 'd':
-                        #print 'readItem: opening %s' % self.dirIndexPath(lpath)
-                        try:    
-                                db = tdb.open(self.dirIndexPath(lpath))
-                                str = db[self.__DirInfoKey]
-                        except:
-                                return None, None
-                        info = VFSDirInfo(lpath, str)
-                        db.close()
-                return t, info          
+                typ, info = self.DB.getItem(lpath)
+                if typ == 'd':
+                        return 'd', VFSDirInfo(lpath, info)
+                if typ == 'f':
+                        return 'f', VFSFileInfo(lpath, info)
+                else:
+                        return None
 
         @synchronized
         def writeItem(self, lpath, data):
                 typ, info = data
-                if info.Type == 'f':
-                        db = tdb.open(self.dirIndexPath(self.parentPath(lpath)),True)
-                        db[self.fileName(lpath)] = info.serialize()
-                        db.sync()
-                        db.close()
-                else:   # assume 'd'
-                        db = tdb.open(self.dirIndexPath(lpath),True)
-                        db[self.__DirInfoKey] = info.serialize()
-                        db.sync()
-                        db.close()
+                self.DB.putItem(lpath, typ, info.serialize())
                                 
         def getType(self, lpath):
-                t, info = self.Cache[lpath]
-                #self.debug('getType(%s) -> %s' % (lpath, t))
-                return t
+                tup = self.Cache[lpath]
+                return None if tup is None else tup[0]
 
         def getFileInfo(self, lpath):
-                t, info = self.Cache[lpath]
+                tup = self.Cache[lpath]
+                if tup is None:	return None
+                t, info = tup
                 if t != 'f':    return None
                 return info
 
         def getDirInfo(self, lpath):
-                t, info = self.Cache[lpath]
+                tup = self.Cache[lpath]
+                if tup is None:	return None
+                t, info = tup
                 if t != 'd':    return None
                 return info
 
         def getInfo(self, lpath):
-                t, info = self.Cache[lpath]
+                tup = self.Cache[lpath]
+                if tup is None:	return None
+                t, info = tup
                 return info
         
         def storeFileInfo(self, info):
@@ -559,13 +415,7 @@ class   VFSDB(Primitive, Logged):
                         return 0, 'Already exists'
                 if not self.isDir(self.parentPath(lpath)):
                         return 0, 'Parent directory not found'
-                fpath = self.fullPath(lpath)
-                try:    os.mkdir(fpath)
-                except:
-                        return 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
-                try:    self.storeDirInfo(info)
-                except:
-                        return 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
+                self.DB.mkdir(lpath, info.serialize())
                 return 1, 'OK'
 
         @synchronized
@@ -576,10 +426,7 @@ class   VFSDB(Primitive, Logged):
                         return 0, 'Is not a file'
                 info = self.getFileInfo(lpath)
                 try:
-                        db = tdb.open(self.dirIndexPath(self.parentPath(lpath)))
-                        del db[self.fileName(lpath)]
-                        db.sync()
-                        db.close()
+                    self.DB.delItem(lpath)
                 except: return 0, 'Error: %s %s' % (sys.exc_info()[0], sys.exc_info()[1])
                 vfssrv_global.G_CellIF.delFile(lpath, info.Servers)
                 del self.Cache[lpath]
@@ -605,12 +452,13 @@ class   VFSDB(Primitive, Logged):
                 return 1, 'OK'
 
         def idle(self):
-                if time.time() > self.LastFlush + self.FlushInterval:
-                        self.flush()
-                        self.LastFlush = time.time()
+            pass
+            #    if time.time() > self.LastFlush + self.FlushInterval:
+            #           self.flush()
+            #           self.LastFlush = time.time()
 
         @synchronized
         def flush(self):
-                self.Cache.flush()
+                #self.Cache.flush()
                 self.CellInxDB.flush()
         

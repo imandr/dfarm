@@ -1,72 +1,3 @@
-#
-# @(#) $Id: CellStorage.py,v 1.20 2003/12/04 16:52:28 ivm Exp $
-#
-# $Log: CellStorage.py,v $
-# Revision 1.20  2003/12/04 16:52:28  ivm
-# Implemented BSD DB - based VFS DB
-# Use connect with time-out for data communication
-#
-# Revision 1.18  2002/10/31 17:52:33  ivm
-# v2_3
-#
-# Revision 1.17  2002/08/16 19:18:28  ivm
-# Implemented size estimates for ftpd
-#
-# Revision 1.16  2002/08/12 16:29:43  ivm
-# Implemented cell indeces
-# Kerberized ftpd
-#
-# Revision 1.15  2002/07/26 19:09:09  ivm
-# Bi-directional EOF confirmation. Tested.
-#
-# Revision 1.14  2002/07/16 20:09:49  ivm
-# Changed default attractor value to 50
-#
-# Revision 1.13  2002/07/16 18:44:40  ivm
-# Implemented data attractions
-# v2_1
-#
-# Revision 1.11  2002/04/30 20:07:15  ivm
-# Implemented and tested:
-#       node replication
-#       node hold/release
-#
-# Revision 1.10  2001/10/12 21:12:02  ivm
-# Fixed bug with double-slashes
-# Redone remove-on-put
-# Implemented log files
-#
-# Revision 1.9  2001/09/27 20:37:24  ivm
-# Fixed some bugs
-# Introduced cell class in configuration for heterogenous dfarms
-#
-# Revision 1.8  2001/06/18 18:05:52  ivm
-# Implemented disconnect-on-time-out in SockRcvr
-#
-# Revision 1.7  2001/06/15 22:12:25  ivm
-# Fixed bug with replication stall
-#
-# Revision 1.5  2001/05/29 15:40:21  ivm
-# Accept local directory in "get logpath localdir"
-# Print error returned by "ls"
-#
-# Revision 1.4  2001/05/22 13:27:19  ivm
-# Fixed some bugs
-# Implemented non-blocking send in Replicator
-# Implemented ACCEPT Remote
-#
-# Revision 1.3  2001/04/12 16:02:31  ivm
-# Fixed Makefiles
-# Fixed for fcslib 2.0
-#
-# Revision 1.2  2001/04/11 20:59:50  ivm
-# Fixed some bugs
-#
-# Revision 1.1  2001/04/04 14:25:48  ivm
-# Initial CVS deposit
-#
-#
-
 from txns import HasTxns
 
 from txns import *
@@ -77,6 +8,7 @@ except: pass
 import glob
 import stat
 import cellmgr_global
+from logs import Logged
 import pwd
 from VFSFileInfo import *
 import sys
@@ -145,7 +77,7 @@ class   PutTxn(ULTxn):
         def attractor(self, sclass):
                 return self.PSA.attractor(sclass)
 
-class   PSA(HasTxns):
+class   PSA(HasTxns, Logged):
 
         def __init__(self, name, root, size, attractors):       # size in mb
                 self.Name = name
@@ -157,13 +89,8 @@ class   PSA(HasTxns):
                 self.Used = 0
                 self.LastPrune = 0
 
-        def log(self, msg):
-                msg = 'PSA[%s@%s]: %s' % (self.Name, self.Root, msg)
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
+        def __str__(self):
+            return "PSA[%s @%s]" % (self.Name, self.Root)
 
         def fullDataPath(self, lpath):
                 if not lpath or lpath[0] != '/':
@@ -389,7 +316,7 @@ class   PSA(HasTxns):
                         return self.Attractors['*']
                 return 0
 
-class   CellStorageMgr:
+class   CellStorageMgr(Logged):
         def __init__(self, myid, myclass, cfg):
                 self.PSAs = {}
                 for psan, params in cfg.items():
@@ -416,14 +343,6 @@ class   CellStorageMgr:
                                 raise OSError(val)
                 self.PSAList = list(self.PSAs.keys())           # list for round-robin
                 self.IsHeld = 0         
-
-        def log(self, msg):
-                msg = 'CellStorageMgr: %s' % (msg,)
-                if cellmgr_global.LogFile:
-                        cellmgr_global.LogFile.log(msg)
-                else:
-                        print(msg)
-                        sys.stdout.flush()
 
         def status(self):
                 ret = ''

@@ -1,7 +1,6 @@
 BINFILES = CellIF.py                         vfssrv.sh \
 	VFSServer.py            vfssrv_global.py \
-	VFSDB.py                vfssrv.py	QuotaMgr.py \
-	tdb.py
+	VFSDB2.py VFSDBStorage.py vfssrv.py	QuotaMgr.py 
 
 
 #LIBFILES = 		# VFSFileInfo.py

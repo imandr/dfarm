@@ -1,6 +1,6 @@
 
 from SockStream import SockStream
-from VFSFileInfo import VFSFileInfo
+from VFSFileInfo import VFSFileInfo, VFSDirInfo
 from DataClient import DataClient
 import select
 import os, sys
@@ -46,7 +46,8 @@ class   FileHandle:
                         r,w,e = select.select([self.Sock],[],[],2.0)
                         if r:
                                 reply, addr = self.Sock.recvfrom(10000)
-                                words = msg.split()
+                                reply = to_str(reply)
+                                words = reply.split()
                                 if len(words) >= 1 and words[0] == 'OK':
                                         self.DAddr = addr
                                         done = 1
@@ -66,7 +67,7 @@ class   FileHandle:
                         r,w,e = select.select([self.Sock],[],[],2.0)
                         if r:
                                 reply, addr = self.Sock.recvfrom(10000)
-                                words = msg.split(':', 1)
+                                words = reply.split(':', 1)
                                 if len(words) >= 1:
                                         off = int(words[0])
                                         if off == self.Offset:
@@ -372,16 +373,17 @@ class   DiskFarmClient:
                         if not ans:
                                 ans = None
                 sock.close()
-                return ans
+                return to_str(ans)
                 
         def cellInfo(self, node):
                 sock = socket(AF_INET, SOCK_DGRAM)
-                sock.sendto(to_bytes('STATPSA %s' % self.FarmName, (node, self.CAddr[1])))
+                sock.sendto(to_bytes('STATPSA %s' % self.FarmName), (node, self.CAddr[1]))
                 r,w,e = select.select([sock],[],[],30)
                 if not r:
                         sock.close()
                         return None
                 ans, addr = sock.recvfrom(100000)
+                ans = to_str(ans)
                 lines = ans.split('\n')
                 st = CellInfo(node)
                 # parse PSAs
@@ -422,6 +424,7 @@ class   DiskFarmClient:
                 #print r
                 while r:
                         msg, addr = sock.recvfrom(10000)
+                        msg = to_str(msg)
                         #print msg, addr
                         if msg:
                                 words = msg.split()
@@ -482,13 +485,15 @@ class   DiskFarmClient:
                                 except:
                                         break
                                 nwait = nwait - 1
+                                msg = to_str(msg)
                                 msgs.append((msg, addr, time.time()))
                         while nwait >= maxping or \
                                         (nwait > 0 and itosend >= len(self.NodeList)):
                                 # wait for answers if necessary
-                                r,w,e = select.select([sock],[],[],3)
+                                r,w,e = select.select([sock],[],[],1)
                                 if r:
                                         msg, addr = sock.recvfrom(100000)
+                                        msg = to_str(msg)
                                         msgs.append((msg, addr, time.time()))
                                         nwait = nwait - 1
                                 else:

@@ -84,7 +84,7 @@ class   ResTicket:
                 return self.NRep * self.Size
 
         def __str__(self):
-                return '<ResTicket <%s> %s*%s %s %s>' % (
+                return 'ResTicket [<%s> %s*%s %s %s]' % (
                         self.Key, self.Size, self.NRep, time.ctime(self.ExpTime),
                         self.User) 
 

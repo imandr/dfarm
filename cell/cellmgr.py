@@ -12,17 +12,15 @@ from Timer import Timer
 from LogFile import LogFile
 import os
 import time, getopt, sys
-
-def idle_tasks(t, arg):
-        cellmgr_global.DataMover.idle()
-        cellmgr_global.VFSSrvIF.idle()
-        cellmgr_global.CellStorage.idle()
+import logs
 
 if __name__ == '__main__':
         sel = Selector()
-        opts, args = getopt.getopt(sys.argv[1:], "c:")
+        opts, args = getopt.getopt(sys.argv[1:], "c:d")
         opts = dict(opts)
         cfg = DFConfig(opts.get("-c"), 'DFARM_CONFIG')
+        debug = "-d" in opts
+        logs.set_debug(debug)
         myid = gethostname()
         domain = cfg['cell'].get('domain','')
         dot_dom = '.' + domain
@@ -43,7 +41,7 @@ if __name__ == '__main__':
         if logpath:
                 if isinstance(logpath, list):
                         logpath, interval = tuple(logpath)
-                cellmgr_global.LogFile = LogFile(logpath, interval)
+        logs.open_log(logpath, interval)
         cellmgr_global.ReplicationManager = ReplicationManager(cfg["cell"])
         cellmgr_global.DataServer = data_server = DataServer(myclass, class_section)
         cellmgr_global.CellStorage = cell_storage = CellStorageMgr(myid, myclass, class_section)
