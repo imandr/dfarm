@@ -15,6 +15,9 @@ class RemoteReader(object):
         self.EOFReceived = False
         
     def __del__(self):
+        self.close()
+
+    def close(self):
         try:    self.DataSock.close()
         except: pass
         try:    self.CtlSock.close()
@@ -47,7 +50,7 @@ class RemoteReader(object):
             if not part:
                 self.DataSock.close()
                 break
-            self.parts.append(part)
+            parts.append(part)
             nread += len(part)
         self.NBytes += nread
         data = b''.join(parts)
@@ -75,19 +78,28 @@ class RemoteWriter(object):
         self.NBytes = 0
         if tmo is not None:
             peer_data_sock.settimeout(tmo)
-        self.EOFSent = True
+        self.Closed = False
 
     def write(self, data):
         self.DataSock.sendall(data)
         self.NBytes += len(data)
         
     def close(self):
-        self.DataSock.close()
-        stream = SockStream(self.CtlSock)
-        answer = stream.sendAndRecv('EOF %d' % (self.NBytes,))
-        self.CtlSock.close()
-        if answer != "OK":
-            raise IOError("Protocol error during closing handshake")
+        try:
+                if not self.Closed:
+                        self.DataSock.close()
+                        stream = SockStream(self.CtlSock)
+                        answer = stream.sendAndRecv('EOF %d' % (self.NBytes,))
+                        self.CtlSock.close()
+                        if answer != "OK":
+                            raise IOError("Protocol error during closing handshake")
+                        self.Closed = True
+
+        finally:
+                try:    self.DataSock.close()
+                except: pass
+                try:    self.CtlSock.close()
+                except: pass
             
     def __del__(self):
         self.close()
@@ -168,6 +180,7 @@ class DataClient(object):
         else:
             fd = ppath
         with fd:
+            eof = False
             while not eof:
                     data = fd.read(60000)
                     if not data:
@@ -176,10 +189,12 @@ class DataClient(object):
                     else:
                         outf.write(data)
         outf.close()
+        return True, "OK"
                         
     def get(self, info, ppath, nolocal = True, tmo = None):
         readf = self.openRead(info, nolocal, tmo)
         with open(ppath, 'wb') as fd:
+            eof = False
             while not eof:
                     #print("_remote_get: peer_data_sock.recv()...")
                     data = readf.read(1024*1024*10)
@@ -189,10 +204,7 @@ class DataClient(object):
                     else:
                             fd.write(data)
         readf.close()
-        
-
-
-
+        return True, "OK"
 
     def ___put(self, info, ppath, ncopies = 1, nolocal = True, tmo = None):
         cmd = 'ACCEPTR' if nolocal else 'ACCEPT'
