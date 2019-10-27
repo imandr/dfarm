@@ -1,6 +1,7 @@
 from webpie import WPApp, WPHandler, Response
 from dfarm_api import DiskFarmClient
 from dfconfig import DFConfig
+import os
 
 class Handler(WPHandler):
     
@@ -8,9 +9,9 @@ class Handler(WPHandler):
         method = request.method
         
         if method.upper() == "GET":
-            return self.data_get(equest, relpath, **args)
+            return self.data_get(request, relpath, **args)
         elif method.upper() in ("POST", "PUT"):
-            return self.data_put(equest, relpath, **args)
+            return self.data_put(request, relpath, **args)
 
             
     def data_get(self, request, relpath, **args):
@@ -22,12 +23,13 @@ class Handler(WPHandler):
         if info.Type != 'f':
             return Response("Not a file", status=403)
 
-        resp = Response(body_file = dfarm_client.open(info, 'r', tmo=10)))
+        resp = Response(body_file = dfarm_client.open(info, 'r', tmo=10))
         if info.Size is not None:
-            resp.headers["Content-Length"] = info.Size
+            resp.headers["Content-Length"] = "%d" % (info.Size,)
         return resp
         
     def data_put(self, request, relpath, ncopies=1, **args):
+        ncopies = int(ncopies)
         dfarm_client = self.App.DiskFarmClient
 
         info = dfarm_client.fileInfo(relpath, None, size = int(request.headers["Content-Length"]))
@@ -45,7 +47,7 @@ class Handler(WPHandler):
 class App(WPApp):
     
     def __init__(self, root_class):
-        WPApp.__init__(root_class)
+        WPApp.__init__(self, root_class)
         cfg = DFConfig(os.environ['DFARM_CONFIG'])
         self.DiskFarmClient = DiskFarmClient(cfg)
         
