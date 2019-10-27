@@ -572,15 +572,22 @@ class   DiskFarmClient:
                 sock.close()
                 return lst
 
-        def get(self, lpath, fn, info, nolocal = True, tmo = None):
+        def get(self, info, fn, nolocal = True, tmo = None):
             data_client = DataClient(self.CAddr, self.FarmName)
             return data_client.get(info, fn, nolocal, tmo)
-
-        def put(self, fn, lpath, info, ncopies = 1, nolocal = True, tmo = None):
+            
+        def put(self, info, fn, ncopies = 1, nolocal = True, tmo = None):
             data_client = DataClient(self.CAddr, self.FarmName)
             return data_client.put(info, fn, ncopies, nolocal, tmo)
-            
 
+        def open(self, info, mode, ncopies = 1, nolocal = True, tmo = None):
+            assert mode in ("r", "w")
+            data_client = DataClient(self.CAddr, self.FarmName)
+            if mode == "r":
+                return data_client.openRead(info, nolocal = nolocal, tmo = tmo)
+            elif mode == "w":
+                return data_client.openWrite(info, ncopies = ncopies, nolocal = nolocal, tmo = tmo)
+                
 def long2str(x):
         if type(x) != type(1) and type(x) != type(1):
                 #print type(x), type(1L)

@@ -381,7 +381,7 @@ elif cmd == 'get':
                         dst = dst + '/' + fn
         except:
                 pass
-        sts, err = c.get(lpath, dst, info, tmo = tmo)
+        sts, err = c.get(info, dst, tmo = tmo)
         if not sts or verbose:
                 print(err)
         sys.exit(sts == 0)
@@ -456,7 +456,7 @@ elif cmd == 'put':
                         continue
                 #print("VFS entry created:", info)
                 t0 = time.time()
-                sts, err = c.put(src, lpath, info, ncopies, nolocal, tmo = tmo)
+                sts, err = c.put(info, src, ncopies=ncopies, nolocal=nolocal, tmo = tmo)
                 status = sts
                 if not sts or verbose:
                         if len(srclst) > 1:

@@ -7,6 +7,7 @@ DSTUPS = $(DSTROOT)/ups
 DSTDOC = $(DSTROOT)/doc
 DSTLIB = $(DSTROOT)/lib 
 DSTCFG = $(DSTROOT)/cfg
+DSTWEB = $(DSTROOT)/webserver
 TARDIR = /tmp/$(USER)
 
 DSTDIRS = $(DSTBIN) $(DSTLIB) $(DSTUPS) $(DSTDOC) $(TARDIR)
@@ -24,6 +25,7 @@ build:
 	cd cfg; 	make DSTCFG=$(DSTCFG) build
 	cd scripts; 	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
 	cd ups; 	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) DSTUPS=$(DSTUPS) build
+	cd webserver; 	make DSTWEB=$(DSTWEB) build
 	#cd c-src;	make upstar
 	#cd doc;		make upstar
 	#cd misc;	make upstar

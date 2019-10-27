@@ -159,7 +159,7 @@ class DataClient(object):
 
         return  peer_ctl_sock, peer_ctl_addr,  peer_data_sock, peer_data_addr   
 
-    def openRead(self, info, nolocal = True, tmo = None):
+    def openRead(self, info, nolocal = False, tmo = None):
         cmd = 'SENDR' if nolocal else 'SEND'
         bcast = '%s %s %s %s' % (cmd, self.FarmName, info.Path, info.CTime)
         peer_ctl_sock, peer_ctl_addr, peer_data_sock, peer_data_addr = self.init_transfer(bcast, None, tmo)
