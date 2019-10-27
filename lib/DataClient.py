@@ -3,6 +3,95 @@ import time
 from py3 import to_bytes, to_str
 from SockStream import SockStream
 
+class RemoteReader(object):
+    
+    def __init__(self, peer_ctl_sock, peer_data_sock, tmo):
+        self.CtlSock = peer_ctl_sock
+        self.DataSock = peer_data_sock
+        self.NBytes = 0
+        self.DataClosed = False
+        if tmo is not None:
+            peer_data_sock.settimeout(tmo)
+        self.EOFReceived = False
+        
+    def __del__(self):
+        try:    self.DataSock.close()
+        except: pass
+        try:    self.CtlSock.close()
+        except: pass
+
+    def _checkEOF(self):
+        if not self.EOFReceived:
+            try:
+                stream = SockStream(self.CtlSock)
+                msg = stream.recv()
+                words = msg.split()
+                assert words[0] == "EOF"
+                count = int(words[1])
+                stream.send("OK")
+            except:
+                raise IOError("Error processing EOF message")
+            finally:
+                self.CtlSock.close()
+            if self.NBytes != count:
+                raise IOError("Incomplete file ransfer")
+            self.EOFReceived = True
+
+    def _read(self, n):
+        if n <= 0:  return b''
+        nread = 0
+        parts = []
+        while nread < n and not self.EOFReceived:
+            try:    part = self.DataSock.recv(n - nread)
+            except: part = b''
+            if not part:
+                self.DataSock.close()
+                break
+            self.parts.append(part)
+            nread += len(part)
+        self.NBytes += nread
+        data = b''.join(parts)
+        if not data:
+            self._checkEOF()
+        return data
+
+    def read(self, n=None):
+        if n is None:
+            out = []
+            eof = False
+            while not eof:
+                data = self._read(10000000)
+                if not data:    eof = True
+                else:           out.append(data)
+            return b''.join(out)
+        else:
+            return self._read(n)
+
+class RemoteWriter(object):
+    
+    def __init__(self, peer_ctl_sock, peer_data_sock, tmo):
+        self.CtlSock = peer_ctl_sock
+        self.DataSock = peer_data_sock
+        self.NBytes = 0
+        if tmo is not None:
+            peer_data_sock.settimeout(tmo)
+        self.EOFSent = True
+
+    def write(self, data):
+        self.DataSock.sendall(data)
+        self.NBytes += len(data)
+        
+    def close(self):
+        self.DataSock.close()
+        stream = SockStream(self.CtlSock)
+        answer = stream.sendAndRecv('EOF %d' % (self.NBytes,))
+        self.CtlSock.close()
+        if answer != "OK":
+            raise IOError("Protocol error during closing handshake")
+            
+    def __del__(self):
+        self.close()
+
 class DataClient(object):
 
     def __init__(self, bcast_addr, farm_name):
@@ -58,7 +147,54 @@ class DataClient(object):
 
         return  peer_ctl_sock, peer_ctl_addr,  peer_data_sock, peer_data_addr   
 
+    def openRead(self, info, nolocal = True, tmo = None):
+        cmd = 'SENDR' if nolocal else 'SEND'
+        bcast = '%s %s %s %s' % (cmd, self.FarmName, info.Path, info.CTime)
+        peer_ctl_sock, peer_ctl_addr, peer_data_sock, peer_data_addr = self.init_transfer(bcast, None, tmo)
+        return RemoteReader(peer_ctl_sock, peer_data_sock, tmo)
+
+    def openWrite(self, info, ncopies = 1, nolocal = True, tmo = None):
+        cmd = 'ACCEPTR' if nolocal else 'ACCEPT'
+                # ACCEPT <farm name> <nfrep> <lpath> <addr> <port> <info>
+        bcast = '%s %s %d %s' % (cmd, self.FarmName, ncopies-1, info.Path)
+
+        peer_ctl_sock, peer_ctl_addr, peer_data_sock, peer_data_addr = self.init_transfer(bcast, info, tmo)
+        return RemoteWriter(peer_ctl_sock, peer_data_sock, tmo)
+
     def put(self, info, ppath, ncopies = 1, nolocal = True, tmo = None):
+        outf = self.openWrite(info, ncopies, nolocal, tmo)
+        if isinstance(ppath, str):
+            fd = open(ppath, 'rb')
+        else:
+            fd = ppath
+        with fd:
+            while not eof:
+                    data = fd.read(60000)
+                    if not data:
+                            #print ("_remote_put: eof")
+                            eof = True
+                    else:
+                        outf.write(data)
+        outf.close()
+                        
+    def get(self, info, ppath, nolocal = True, tmo = None):
+        readf = self.openRead(info, nolocal, tmo)
+        with open(ppath, 'wb') as fd:
+            while not eof:
+                    #print("_remote_get: peer_data_sock.recv()...")
+                    data = readf.read(1024*1024*10)
+                    #print("_remote_get: peer_data_sock.recv() -> %d" % (len(data),))
+                    if not data:
+                            eof = True
+                    else:
+                            fd.write(data)
+        readf.close()
+        
+
+
+
+
+    def ___put(self, info, ppath, ncopies = 1, nolocal = True, tmo = None):
         cmd = 'ACCEPTR' if nolocal else 'ACCEPT'
                 # ACCEPT <farm name> <nfrep> <lpath> <addr> <port> <info>
         bcast = '%s %s %d %s' % (cmd, self.FarmName, ncopies-1, info.Path)
@@ -111,7 +247,9 @@ class DataClient(object):
                 return False,'Transfer aborted'
 
 
-    def get(self, info, ppath, nolocal = True, tmo = None):
+
+
+    def ___get(self, info, ppath, nolocal = True, tmo = None):
         cmd = 'SENDR' if nolocal else 'SEND'
         bcast = '%s %s %s %s' % (cmd, self.FarmName, info.Path, info.CTime)
 
