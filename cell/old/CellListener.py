@@ -103,7 +103,7 @@ class   CellListener:
                 try:    msg, addr = self.Sock.recvfrom(10000)
                 except: return  # for stupid conncetion refused error in Linux
                 msg = to_str(msg)
-                print ("CellListener.doRead: msg <%s> from %s" % (repr(msg), addr))
+                #print ("CellListener.doRead: msg <%s> from %s" % (repr(msg), addr))
                 #if addr[0] == self.MyHost:
                 #       return  # do not talk to myself - bad sign
                 #print 'rcvd: <%s> from <%s>' % (msg, addr)
@@ -116,7 +116,7 @@ class   CellListener:
                 cmd = words[0]
                 args = words[2:]
                 ans = None
-                print ("CellListener.doRead: cmd: %s args: %s" % (cmd, args))
+                #print ("CellListener.doRead: cmd: %s args: %s" % (cmd, args))
                 if cmd == 'ACCEPT':
                         ans = self.doAccept(args, msg, addr)
                 elif cmd == 'ACCEPTR':
@@ -185,14 +185,14 @@ class   CellListener:
                                 return None
                 ans = 'PONG %s %d %d %s' % (self.MyID, np, ng, 
                                 cellmgr_global.CellStorage.status())
-                print("sending pong:", ans)
+                #print("sending pong:", ans)
                 try:    self.Sock.sendto(to_bytes(ans), retaddr)
                 except: raise
                 return None
                         
         def doAccept(self, args, msg, addr, nolocal=0):
                 # ACCEPT <farm name> <nfrep> <lpath> <addr> <port> <info>
-                print("doAccept(%s, %s, %s, %s)" % (args, msg, addr, nolocal))
+                #print("doAccept(%s, %s, %s, %s)" % (args, msg, addr, nolocal))
                 if not cellmgr_global.VFSSrvIF.Reconciled:
                         return None
                 if nolocal and self.clientIsLocal(addr):

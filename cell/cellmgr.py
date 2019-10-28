@@ -15,6 +15,7 @@ import time, getopt, sys
 import logs
 
 if __name__ == '__main__':
+        open("cellmgr.pid", "w").write("%d" % (os.getpid(),))
         sel = Selector()
         opts, args = getopt.getopt(sys.argv[1:], "c:d")
         opts = dict(opts)

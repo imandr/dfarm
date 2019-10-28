@@ -43,9 +43,11 @@ class FileMover(Task, Logged):
             except:
                 raise RuntimeError("control socket connection failure")
             
-            self.log('control socket connected')
+            self.debug('control socket connected')
             stream = SockStream(csock)
+            self.debug("stream.recv...")
             msg = stream.recv()
+            self.debug("msg from control: [%s]" % (msg,))
             if not msg or not msg.startswith("DATA "):
                 csock.close()
                 raise RuntimeError('bad DATA message: "%s"' % (msg,))
@@ -71,18 +73,22 @@ class FileMover(Task, Logged):
     
             try:    cstream, csock, dsock = self.init_transfer(self.CAddr)
             except Exception as e: 
+                self.debug("failed to initiate the transfer: %s" % (e,))
                 return self.failed("failed to initiate the transfer: %s" % (e,))
             
-            self.log("transfer initialized with remote data socket %s" % (dsock.getsockname(),))
+            self.debug("transfer initialized with remote data socket %s" % (dsock.getpeername(),))
             
-            try:    nbytes = self.transfer(cstream, csock, dsock)
+            try:    
+                nbytes = self.transfer(cstream, csock, dsock)
             except Exception as e:
+                self.debug("transfer failed: %s" % (e,))
                 return self.failed("transfer failed: %s" % (e,))
             finally:
                 dsock.close()
                 csock.close()
 
             self.succeeded()
+            self.debug("done")
                 
         def failed(self, reason):
             self.log(reason)
@@ -111,12 +117,14 @@ class SocketSender(FileMover):
                     else:
                         dsock.sendall(data)
                         nbytes += len(data)
+                        self.debug("sent %d bytes" % (len(data),))
             dsock.close()
-            self.log("senfing EOF...")
+            self.debug("senfing EOF...")
             ok = cstream.sendAndRecv("EOF %d" % (nbytes,))
-            self.log("response to EOF: %s" % (ok,))
+            self.debug("response to EOF: %s" % (ok,))
             if ok != "OK":
                 self.log("Expected OK from the sender, got '%s'" % (ok,))         
+            self.debug("transfer complete")
             return nbytes
 
 class SocketReceiver(FileMover):
@@ -194,9 +202,11 @@ class   DataServer(Primitive, Logged):
                         return self.canReceive(lpath)
                 
         def sendSocket(self, txn, caddr, delay):
+                self.debug("add read task: %s" % (txn.LPath,))
                 self.GetMovers.addTask(SocketSender(txn, caddr, delay))
 
         def recvSocket(self, txn, caddr, delay):
+                self.debug("add write task: %s" % (txn.LPath,))
                 self.GetMovers.addTask(SocketReceiver(txn, caddr, delay))
                 
         """ comment out
@@ -233,15 +243,15 @@ class   DataServer(Primitive, Logged):
         def statTxns(self):
             pending, active = self.GetMovers.tasks()
             stats = [
-                "RD * %s" % (x.LogPath,) for x in active
+                "RD * %s" % (x.Txn.LPath,) for x in active
             ] + [
-                "RD I %s" % (x.LogPath,) for x in pending
+                "RD I %s" % (x.Txn.LPath,) for x in pending
             ]
             pending, active = self.PutMovers.tasks()
             stats += [
-                "WR * %s" % (x.LogPath,) for x in active
+                "WR * %s" % (x.Txn.LPath,) for x in active
             ] + [
-                "WR I %s" % (x.LogPath,) for x in pending
+                "WR I %s" % (x.Txn.LPath,) for x in pending
             ]
 
             return "\n".join(stats)

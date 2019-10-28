@@ -116,6 +116,7 @@ class   StorageCellConnection(TCPClientConnection, Logged):
                         self.send('RELEASE')
 
                 def eof(self):
+                        self.debug("eof")
                         if self.Name:
                                 self.SCIF.deleteCellConnection(self.Name)
 

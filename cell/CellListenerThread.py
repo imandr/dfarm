@@ -49,7 +49,7 @@ class   CellListener(PyThread, Logged):
                     cmd = words[0]
                     args = words[2:]
                     ans = None
-                    print("CellListener.run: cmd: %s args: %s" % (cmd, args))
+                    #print("CellListener.run: cmd: %s args: %s" % (cmd, args))
                     if cmd == 'ACCEPT':
                             ans = self.doAccept(args, msg, addr, False)
                     elif cmd == 'ACCEPTR':
@@ -119,7 +119,7 @@ class   CellListener(PyThread, Logged):
                                 return None
                 ans = 'PONG %s %d %d %s' % (self.MyID, np, ng, 
                                 self.CellStorage.status())
-                print("sending pong:", ans)
+                #print("sending pong:", ans)
                 try:    self.Sock.sendto(to_bytes(ans), retaddr)
                 except: raise
                 return None
@@ -132,7 +132,7 @@ class   CellListener(PyThread, Logged):
                 #if nolocal and self.clientIsLocal(addr):
                 #        return None
                 args = msg.split(None, 6)[2:]
-                print("doAccept: args:", args)
+                #print("doAccept: args:", args)
                 if len(args) < 5:
                         return None
                 #print 'doAccept: %s' % args

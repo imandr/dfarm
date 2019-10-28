@@ -366,7 +366,17 @@ elif cmd == 'get':
                 elif opt == '-v': verbose = 1
                 
         lpath = args[0]
-        dst = args[1]
+        if len(args) > 1:
+                dst = args[1]
+                try:
+                        st = os.stat(dst)
+                        if stat.S_ISDIR(st[stat.ST_MODE]):
+                                fn = lpath.split('/')[-1]
+                                dst = dst + '/' + fn
+                except:
+                        pass
+        else:
+                dst = sys.stdout
         info, err = c.getInfo(lpath)
         if not info:
                 print(err)
@@ -374,13 +384,6 @@ elif cmd == 'get':
         if info.Type != 'f':
                 print('Is not a file')
                 sys.exit(2)
-        try:
-                st = os.stat(dst)
-                if stat.S_ISDIR(st[stat.ST_MODE]):
-                        fn = lpath.split('/')[-1]
-                        dst = dst + '/' + fn
-        except:
-                pass
         sts, err = c.get(info, dst, tmo = tmo)
         if not sts or verbose:
                 print(err)

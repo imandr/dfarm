@@ -193,7 +193,13 @@ class DataClient(object):
                         
     def get(self, info, ppath, nolocal = True, tmo = None):
         readf = self.openRead(info, nolocal, tmo)
-        with open(ppath, 'wb') as fd:
+        do_close = False
+        if isinstance(ppath, str):
+            fd = open(ppath, 'wb')
+            do_close = True
+        else:
+            fd = ppath
+        if True:
             eof = False
             while not eof:
                     #print("_remote_get: peer_data_sock.recv()...")
@@ -203,6 +209,10 @@ class DataClient(object):
                             eof = True
                     else:
                             fd.write(data)
+        if do_close:
+            fd.close()
+        else:
+            fd.flush()
         readf.close()
         return True, "OK"
 

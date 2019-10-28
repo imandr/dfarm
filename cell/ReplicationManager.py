@@ -45,15 +45,15 @@ class ReplicationManager(Primitive, Logged):
                     n1 = nfrep/2
                     n2 = nfrep - n1
                     r = Replicator(lfn, lpath, info, n1, self.DClient, self)
-                    #self.log('replicator created: %s' % r)
+                    self.debug('replicator created: %s *%d' % (lpath, n1))
                     self.Replicators.addTask(r)
                     r = Replicator(lfn, lpath, info, n2, self.DClient, self)
-                    #self.log('replicator created: %s' % r)
+                    self.debug('replicator created: %s *%d' % (lpath, n2))
                     self.Replicators.addTask(r)
             elif nfrep > 0:
                     r = Replicator(lfn, lpath, info, nfrep, self.DClient, self)
                     self.Replicators.addTask(r)
-                    #self.log('replicator created: %s' % r)
+                    self.debug('replicator created: %s *%d' % (lpath, nfrep))
 
     def done(self, rep):
         pass
