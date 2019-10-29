@@ -78,15 +78,14 @@ class   VFSSrvIF(PyThread, Logged):
 
                 while not eof:
                     msg = self.Str.recv()        
-                    self.log('doRead: msg:<%s>' % msg)
+                    self.log('doRead: msg: [%s]' % msg)
                     if not msg: 
                         eof = True
                     else:
-                        self.debug("doReadL msg: [%s]" % (msg,))
                         words = msg.split()
                         if words[0] == 'SYNC':
                                 self.Reconciled = 1
-                                self.log('reconciled')
+                                self.log('reconcile confirmed')
                         elif words[0] == 'DEL':
                                 if not words[1:]:
                                     self.disconnect()

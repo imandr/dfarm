@@ -77,7 +77,7 @@ class   PutTxn(ULTxn, Logged):
                 self.PSA.receiveComplete(self.LPath, self.Info)
                 Transaction.commit(self, actSizeMB)
                 if self.NFRep > 0:
-                        cellmgr_global.ReplicationManager.replicate(self.NFRep, self.dataPath(),
+                        cellmgr_global.DataServer.replicate(self.NFRep, self.dataPath(),
                                         self.LPath, self.Info)
 
         def isPutTxn(self):

@@ -3,6 +3,9 @@ import time
 from py3 import to_bytes, to_str
 from SockStream import SockStream
 
+class DCTimeOut(Exception):
+    pass
+
 class RemoteReader(object):
     
     def __init__(self, peer_ctl_sock, peer_data_sock, tmo):
@@ -142,12 +145,11 @@ class DataClient(object):
                 pass
             else:
                 done = True
-        ctl_listen_sock.shutdown(SHUT_RDWR)
         ctl_listen_sock.close()
         bsock.close()
 
         if peer_ctl_sock is None:
-                raise RuntimeError('Request time out')
+                raise DCTimeOut()
         
         data_listen_sock = socket(AF_INET, SOCK_STREAM)
         data_listen_sock.bind((self.MyHost,0))
@@ -163,7 +165,6 @@ class DataClient(object):
             peer_ctl_sock.close()
             raise RuntimeError('Data connection accept() time out')
         finally:
-            data_listen_sock.shutdown(SHUT_RDWR)
             data_listen_sock.close()
 
         return  peer_ctl_sock, peer_ctl_addr,  peer_data_sock, peer_data_addr   

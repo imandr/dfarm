@@ -545,14 +545,15 @@ class   DiskFarmClient:
                                         try:
                                                 nput = int(words[0])
                                                 nget = int(words[1])
+                                                nrep = int(words[2])
                                         except:
                                                 pass
                                         else:
                                                 sts = ''
                                                 if len(words) > 2:
-                                                        sts = words[2]
+                                                        sts = words[3]
                                                 capdct = {}
-                                                for w in words[3:]:
+                                                for w in words[4:]:
                                                         items = w.split(':')
                                                         try:
                                                                 psan = items[0]
@@ -564,9 +565,9 @@ class   DiskFarmClient:
                                                                                         int(items[1]), int(items[2]))
                                                         except:
                                                                 pass
-                                                lst.append((addr[0], cid, t-t0, nput, nget, sts, capdct))
+                                                lst.append((addr[0], cid, t-t0, nput, nget, nrep, sts, capdct))
                                                 if pongcbk != None:
-                                                        pongcbk(addr[0], cid, t-t0, nput, nget, sts, capdct)
+                                                        pongcbk(addr[0], cid, t-t0, nput, nget, nrep, sts, capdct)
                         if donecbk != None and donecbk():
                                 break
                 sock.close()

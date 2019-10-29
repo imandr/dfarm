@@ -1,14 +1,46 @@
-#from txns import *
 from SockStream import SockStream
 from socket import *
-from Replicator import Replicator
-import sys
-import os
-import time
-import cellmgr_global
-import select
+import sys, os, time, random, threading
 from pythreader import Task, synchronized, Primitive, TaskQueue
 from logs import Logged
+from DataClient import DataClient, DCTimeOut
+
+class   Replicator(Task, Logged):
+    def __init__(self, fn, lpath, info, nrep, dclient, rmanager):
+        Task.__init__(self)
+        self.Manager = rmanager
+        self.LocalFN = fn
+        self.LogPath = lpath
+        self.FileInfo = info
+        self.NRep = nrep
+        self.DClient = dclient
+
+    def __str__(self):
+        return "Replicator[%s *%d]" % (self.LogPath, self.NRep)
+        
+    def reinit(self):
+        pass
+            
+    def run(self):
+        try:    f = open(self.LocalFN, "rb")
+        except:
+            self.debug("Can not open data file")
+            return self.Manager.done(self)
+
+        self.debug("replicating...")
+        try:    ok, reason = self.DClient.put(self.FileInfo, f, self.NRep, True, 5.0)
+        except DCTimeOut:
+            self.log("Time-out. Will retry")
+            self.Manager.retryReplicator(self, 10.0)
+            return
+        finally:
+            f.close()
+            
+        if ok:
+            self.debug("done: %s" % (reason,))
+        else:
+            self.debug("failed. will retry")
+            self.Manager.retryReplicator(self, 10.0)
 
 class FileMover(Task, Logged):
     
@@ -102,7 +134,7 @@ class FileMover(Task, Logged):
 class SocketSender(FileMover):
     
         def __str__(self):
-                return 'SocketSender[lp=%s -> c=%s]' % (
+                return 'SocketSender[%s -> c=%s]' % (
                         self.Txn.LPath, self.CAddr)
                 
         def transfer(self, cstream, csock, dsock):
@@ -131,7 +163,7 @@ class SocketSender(FileMover):
 class SocketReceiver(FileMover):
     
         def __str__(self):
-                return 'SocketReceiver[lp=%s <- c=%s]' % (
+                return 'SocketReceiver[%s <- c=%s]' % (
                         self.Txn.LPath, self.CAddr)
 
         def transfer(self, cstream, csock, dsock):
@@ -161,20 +193,21 @@ class SocketReceiver(FileMover):
 
 
 class   DataServer(Primitive, Logged):
-        def __init__(self, myid, cfg):
+        def __init__(self, myid, cellcfg, classcfg):
             Primitive.__init__(self)
-            self.Cfg = cfg
-            self.MyID = myid
-            self.MaxGet = cfg.get('max_get',3)
-            self.MaxPut = cfg.get('max_put',1)
-            self.MaxRep = cfg.get('max_rep',2)
-            self.MaxTxn = cfg.get('max_txn',5)
-            
+            self.MaxGet = classcfg.get('max_get',10)
+            self.MaxPut = classcfg.get('max_put',2)
+            self.MaxRep = classcfg.get('max_rep',5)
+            self.MaxTxn = classcfg.get('max_txn',15)
+        
             self.GetMovers = TaskQueue(self.MaxGet)
             self.PutMovers = TaskQueue(self.MaxPut)
-            self.RepMovers = TaskQueue(self.MaxRep)
-            
-            self.ReplicatorsToRetry = []
+            self.Replicators = TaskQueue(self.MaxRep, stagger=0.5)
+
+            self.DClient = DataClient(
+                (cellcfg["broadcast"], cellcfg["listen_port"]),
+                cellcfg["farm_name"]
+            )
 
         @synchronized
         def canSend(self, lpath):
@@ -201,7 +234,7 @@ class   DataServer(Primitive, Logged):
                         return self.canSend(lpath)
                 else:
                         return self.canReceive(lpath)
-                
+            
         def sendSocket(self, txn, caddr, delay):
                 self.debug("add read task: %s" % (txn.LPath,))
                 self.GetMovers.addTask(SocketSender(txn, caddr, delay))
@@ -209,14 +242,14 @@ class   DataServer(Primitive, Logged):
         def recvSocket(self, txn, caddr, delay):
                 self.debug("add write task: %s" % (txn.LPath,))
                 self.PutMovers.addTask(SocketReceiver(txn, caddr, delay))
-                
+            
         """ comment out
         def sendLocal(self, txn, caddr, delay):
                 txn.notify(self)
                 #self.log('sendLocal: initiating local send txn #%s to %s' %\
                 #       (txn.ID, caddr))
                 LocalSndr(txn, caddr, self.Sel, delay)
-                
+            
 
         def recvLocal(self, txn, caddr, delay):
                 txn.notify(self)
@@ -228,19 +261,24 @@ class   DataServer(Primitive, Logged):
                 txn.notify(self)
                 FileHandle(info, mode, txn, caddr, self.Sel)
         """
-                
+            
         def putTxns(self):
                 #print 'putTxns: %d' % self.txnCount('U')
                 return len(self.PutMovers.activeTasks())
-                
+            
         def getTxns(self):
                 #print 'getTxns: %d' % self.txnCount('D')
                 return len(self.GetMovers.activeTasks())
                 
+        def repTxns(self):
+                #print 'getTxns: %d' % self.txnCount('D')
+                return len(self.Replicators.activeTasks())
+            
         @synchronized
         def txnCount(self):
             return self.getTxns() + self.putTxns()
-            
+        
+        @synchronized
         def statTxns(self):
             pending, active = self.GetMovers.tasks()
             stats = [
@@ -254,5 +292,40 @@ class   DataServer(Primitive, Logged):
             ] + [
                 "WR I %s" % (x.Txn.LPath,) for x in pending
             ]
+            pending, active = self.Replicators.tasks()
+            stats += [
+                "RP * %s" % (x.LogPath,) for x in active
+            ] + [
+                "RP I %s" % (x.LogPath,) for x in pending
+            ]
 
             return "\n".join(stats)
+
+#
+#.  replication
+#
+
+        def replicate(self, nfrep, lfn, lpath, info):
+                if nfrep > 2:
+                        # make 2 replicators
+                        n1 = nfrep//2
+                        n2 = nfrep - n1
+                        r = Replicator(lfn, lpath, info, n1, self.DClient, self)
+                        self.debug('replicator created: %s *%d' % (lpath, n1))
+                        self.Replicators.addTask(r)
+                        r = Replicator(lfn, lpath, info, n2, self.DClient, self)
+                        self.debug('replicator created: %s *%d' % (lpath, n2))
+                        self.Replicators.addTask(r)
+                elif nfrep > 0:
+                        r = Replicator(lfn, lpath, info, nfrep, self.DClient, self)
+                        self.Replicators.addTask(r)
+                        self.debug('replicator created: %s *%d' % (lpath, nfrep))
+
+        def retryReplicator(self, rep, when):
+            rep.reinit()
+            t = threading.Timer(when + random.random(), self.Replicators.addTask, args=(rep,))
+            t.start()
+        
+
+
+

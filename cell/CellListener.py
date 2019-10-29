@@ -40,6 +40,7 @@ class   CellListener(PyThread, Logged):
                     except: continue
                     if not msg: continue
                     msg = to_str(msg)
+                    self.debug("run: msg: [%s]" % (msg,))
                     #if addr[0] == self.MyHost:
                     #       return  # do not talk to myself - bad sign
                     #print 'rcvd: <%s> from <%s>' % (msg, addr)
@@ -111,13 +112,14 @@ class   CellListener(PyThread, Logged):
                 # PING <farm name> [<host> <port>]
                 np = self.DataServer.putTxns()
                 ng = self.DataServer.getTxns()
+                nr = self.DataServer.repTxns()
                 retaddr = addr
                 if len(args) >= 2:
                         try:
                                 retaddr = (args[0], int(args[1]))
                         except:
                                 return None
-                ans = 'PONG %s %d %d %s' % (self.MyID, np, ng, 
+                ans = 'PONG %s %d %d %d %s' % (self.MyID, np, ng, nr, 
                                 self.CellStorage.status())
                 #print("sending pong:", ans)
                 try:    self.Sock.sendto(to_bytes(ans), retaddr)

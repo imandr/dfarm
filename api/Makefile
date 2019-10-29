@@ -1,4 +1,4 @@
-LIBFILES = DataClient.py  dfconfig.py  LogFile.py  py3.py  Timer.py  VFSFileInfo.py logs.py
+LIBFILES = dfarm_api.py
 
 build: $(DSTBIN) $(DSTLIB)
 	cp $(LIBFILES) $(DSTLIB)

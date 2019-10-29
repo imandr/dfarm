@@ -40,8 +40,7 @@ class   PingPrinter:
                 self.NDown = 0
                 self.TimeSum = 0
                 self.F = f
-                self.NW = 0
-                self.NR = 0
+                self.NPut = self.NGet = self.NRep = 0
                 self.FreeSpace = 0
                 self.N10M = 0
                 self.N100M = 0
@@ -80,11 +79,12 @@ class   PingPrinter:
                                 return 0
                 return 1
                                                 
-        def pong(self, addr, cid, t, nw, nr, sts, capdct):
+        def pong(self, addr, cid, t, np, ng, nr, sts, capdct):
                 #print 'pong: %s' % cid, cid in self.NodeList
                 self.NUp = self.NUp + 1
-                if nw != None:          self.NW = self.NW + nw
-                if nr != None:          self.NR = self.NR + nr
+                if np != None:          self.NPut = self.NPut + np
+                if ng != None:          self.NGet = self.NGet + ng
+                if nr != None:          self.NRep = self.NRep + nr
                 for psan, caps in list(capdct.items()):
                         size, lfree, pfree = caps
                         f = min(lfree, pfree)
@@ -103,7 +103,7 @@ class   PingPrinter:
                                 self.MaxT = t
                 if cid == None:
                         cid = gethostbyaddr(addr)[0]
-                self.NodeDict[cid] = (t, nw, nr, sts)
+                self.NodeDict[cid] = (t, np, ng, nr, sts)
                 self.printCells()
                 
         def printCells(self):
@@ -112,10 +112,10 @@ class   PingPrinter:
                         cid = self.NodeList[self.NextNode]
                         self.NextNode = self.NextNode + 1
                         
-                        t, nw, nr, sts = self.NodeDict[cid]
+                        t, np, ng, nr, sts = self.NodeDict[cid]
                         # del self.NodeDict[cid]
                         if t != None:
-                                self.F.write(self.Format % (cid, int(t*1000 + 0.5), nw, nr, sts))
+                                self.F.write(self.Format % (cid, int(t*1000 + 0.5), np, ng, nr, sts))
                         else:
                                 self.F.write(self.DownFormat % cid)
                         #print 'Next node: %s, in dict: %d' % (
@@ -138,7 +138,7 @@ class   PingPrinter:
                         (self.MinT * 1000 + 0.5), 
                         (self.MaxT * 1000 + 0.5), 
                         (self.TimeSum/self.NUp * 1000 + 0.5),
-                        self.NW, self.NR)
+                        self.NPut, self.NGet, self.NRep)
 
 
 
@@ -634,16 +634,16 @@ elif cmd == 'repfile':
         sys.exit(0)
 
 elif cmd == 'ping':
-        pw = PingPrinter(cfg, sys.stdout, '%20s %5dms %4dw %4dr %s\n', '%20s -- not responding --\n')
+        pw = PingPrinter(cfg, sys.stdout, '%20s %5dms %4dp %4dg %4dr %s\n', '%20s -- not responding --\n')
         lst = c.pingParallel(pw.pong, pw.done)
         pw.close()
-        nup, ndown, mint, maxt, avgt, tput, tget = \
+        nup, ndown, mint, maxt, avgt, tput, tget, trep = \
                 pw.getStats()
         if nup or ndown:
-                print('--- %d/%d nodes up ---------------------------' % \
+                print('--- %d/%d nodes up --------------------------------' % \
                         (nup, nup+ndown))
                 if nup:
-                        print('%20s %5s   %4dw %4dr' % ('total','',tput, tget))
+                        print('%20s %5s   %4dp %4dg %4dr' % ('total','',tput, tget, trep))
                         print('%20s %5dms' % ('min',mint))
                         print('%20s %5dms' % ('avegare',avgt))
                         print('%20s %5dms' % ('max',maxt))

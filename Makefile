@@ -1,4 +1,4 @@
-VERSION = 3.0
+VERSION = 3.1
 
 DSTROOT = $(HOME)/build/dfarm
 
@@ -21,6 +21,7 @@ build:
 	#cd ftp;		make upstar
 	cd vfs; 	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
 	cd lib; 	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
+	cd api; 	make DSTLIB=$(DSTLIB) build
 	cd ui;		make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
 	cd cfg; 	make DSTCFG=$(DSTCFG) build
 	cd scripts; 	make DSTBIN=$(DSTBIN) DSTLIB=$(DSTLIB) build
