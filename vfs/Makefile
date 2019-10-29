@@ -1,5 +1,5 @@
-BINFILES = CellIF.py                         vfssrv.sh \
-	VFSServer.py            vfssrv_global.py \
+BINFILES = CellIF2.py                         vfssrv.sh \
+	VFSServer2.py            vfssrv_global.py \
 	VFSDB2.py VFSDBStorage.py vfssrv.py	QuotaMgr.py 
 
 

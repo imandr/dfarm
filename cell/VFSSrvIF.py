@@ -82,6 +82,7 @@ class   VFSSrvIF(PyThread, Logged):
                     if not msg: 
                         eof = True
                     else:
+                        self.debug("doReadL msg: [%s]" % (msg,))
                         words = msg.split()
                         if words[0] == 'SYNC':
                                 self.Reconciled = 1
@@ -134,6 +135,6 @@ class   VFSSrvIF(PyThread, Logged):
                         if sizestr[-1] == 'L':
                                 sizestr = sizestr[:-1]
                         self.Str.send('IHAVE %s %s %s' % (lpath, info.CTime, sizestr))
-                        self.log("sent IHAVE %s %s" % (lpath, info.CTime))
+                        self.log("sent IHAVE %s %s %s" % (lpath, info.CTime, sizestr))
                         
 

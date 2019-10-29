@@ -1,11 +1,12 @@
-from TCPServer import *
-from TCPClientConnection import *
-from VFSFileInfo import *
-from VFSDB2 import VFSFileLister
+from TCPServerThread import TCPServerThread
+from TCPClientConnectionTask import TCPClientConnectionTask
+from VFSFileInfo import VFSFileInfo, VFSDirInfo, VFSCanonicPath
 import sys
 import vfssrv_global
 import time
 from logs import Logged
+
+from py3 import to_str, to_bytes
 
 def _long2str(x):
         str = '%s' % x
@@ -13,15 +14,14 @@ def _long2str(x):
                 str = str[:-1]
         return str
 
-class   VFSClientConnection(TCPClientConnection, Logged):
+class   VFSClientConnection(TCPClientConnectionTask, Logged):
         MAX_DIR_TO_SEND = 100
-        def __init__(self, usrv, sock, addr, sel):
+        def __init__(self, usrv, sock, addr):
                 self.USrv = usrv
                 self.ClientAddr = addr
-                self.Selector = sel
                 self.ClientSocket = sock
                 self.ClientAddress = addr
-                TCPClientConnection.__init__(self, sock, addr, sel)
+                TCPClientConnectionTask.__init__(self, sock, addr)
                 self.Username = None
                 self.DirList = None
 
@@ -145,6 +145,17 @@ class   VFSClientConnection(TCPClientConnection, Logged):
                 self.Str.send('.')
                 return None
 
+        def sendList(self, lst):
+            def batches(lst):
+                while lst:
+                    yield lst[:100]
+                    lst = lst[100:]
+            lst = sorted(list(lst))
+            for batch in batches(lst):
+                msgs = ["%s %s %s" % (lp, typ, info.serialize()) for lp, typ, info in batch]
+                if msgs:    self.Str.send(msgs)
+            self.Str.send(".")
+
         def doListDirContents(self, lpath):
                 info = vfssrv_global.G_VFSDB.getDirInfo(lpath)
                 if info and not self.USrv.isAdmin(self.Username):
@@ -155,16 +166,14 @@ class   VFSClientConnection(TCPClientConnection, Logged):
                                 if info.Prot[2] != 'r':
                                         return 'PERM Permission denied'
                 nlist = vfssrv_global.G_VFSDB.glob(lpath, '*')
-                lister = VFSFileLister(vfssrv_global.G_VFSDB, self.Str, lpath, nlist)
                 self.Str.send('OK')
-                self.Selector.register(lister, wr=self.ClientSocket.fileno())
+                self.sendList(nlist)
                 return None
 
         def doListPattern(self, ptrn):
                 nlist = vfssrv_global.G_VFSDB.glob(ptrn)
-                lister = VFSFileLister(vfssrv_global.G_VFSDB, self.Str, '', nlist)
                 self.Str.send('OK')
-                self.Selector.register(lister, wr=self.ClientSocket.fileno())
+                self.sendList(nlist)
                 return None
 
         def doGetInfo(self, cmd, args, msg):
@@ -482,17 +491,18 @@ class   VFSClientConnection(TCPClientConnection, Logged):
                 #self.log('connection closed')                          
                 pass
 
-class   VFSServer(TCPServer, Logged):
-        def __init__(self, cfg, sel):
+class   VFSServer(TCPServerThread, Logged):
+        def __init__(self, cfg):
                 self.Cfg = cfg
                 self.Port = cfg['api_port']
-                TCPServer.__init__(self, self.Port, sel)
+                TCPServerThread.__init__(self, self.Port, 
+                    max_clients=10, queue_capacity=100)
                 lst = []
                 self.AdminList = cfg.get('admins', [])
 
         def isAdmin(self, user):
                 return user in self.AdminList
                 
-        def createClientInterface(self, sock, addr, sel):
+        def createClientInterface(self, sock, addr):
                 #self.log('New client at %s' % (addr,))
-                VFSClientConnection(self, sock, addr, sel)
+                return VFSClientConnection(self, sock, addr)

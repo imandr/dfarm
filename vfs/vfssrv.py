@@ -1,7 +1,7 @@
-from VFSServer import VFSServer
-from Selector import Selector
+from VFSServer2 import VFSServer
+#from Selector import Selector
 from VFSDB2 import VFSDB
-from CellIF import StorageCellIF
+from CellIF2 import StorageCellIF
 from QuotaMgr import QuotaManager
 from LogFile import LogFile
 import vfssrv_global
@@ -31,15 +31,14 @@ if __name__ == '__main__':
     opts = dict(opts)
     cfg = DFConfig(opts.get("-c"), 'DFARM_VFS_CONFIG')["VFSServer"]
     
-    sel = Selector()
     logpath = cfg.get('log')
     interval = '1d'
     logs.open_log(logpath, interval)
     logs.set_debug("-d" in opts)
     set_signals()
-    vfssrv_global.G_VFSServer = VFSServer(cfg, sel)
+    vfssrv_global.G_VFSServer = VFSServer(cfg).start()
     vfssrv_global.G_VFSDB = VFSDB(cfg['db_root'])
-    vfssrv_global.G_CellIF = StorageCellIF(cfg, sel)        # fix
+    vfssrv_global.G_CellIF = StorageCellIF(cfg).start()
     vfssrv_global.G_QuotaMgr = QuotaManager(cfg)
 
     logs.log('VFS Server started at %s, pid=%s' %
@@ -53,7 +52,7 @@ if __name__ == '__main__':
     logs.log('End inventory. %d' % nfiles)
 
     while not GotStopSignal:
-            sel.select(20)
+            time.sleep(20)
             vfssrv_global.G_QuotaMgr.idle()
             vfssrv_global.G_VFSDB.idle()
 

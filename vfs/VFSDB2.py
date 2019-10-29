@@ -168,36 +168,6 @@ class CellIndexDB(_Cache, Logged):
         def fpath(self, cname):
                 return '%s/%s.inx' % (self.Root, cname)
 
-class   VFSFileLister(Logged):
-        def __init__(self, db, str, prefix, iterable):
-                self.DB = db
-                self.Str = str
-                self.PathPrefix = prefix
-                if not self.PathPrefix or self.PathPrefix[-1] != '/':
-                        self.PathPrefix = self.PathPrefix + '/'
-                self.PathList = sorted(list(iterable))      # list of tuples: (name, type, info)
-
-        def isEmpty(self):
-                return len(self.PathList) == 0
-
-        def doWrite(self, fd, sel):
-                if self.isEmpty():
-                        self.Str.send('.')
-                        sel.unregister(wr=fd)
-                        return
-                lst = self.getNext()
-                msglst = []
-                #self.DB.Debug=1
-                for lp, typ, info in lst:
-                        msglst.append('%s %s %s' % (lp, typ, info.serialize()))
-                #self.DB.Debug=0
-                self.Str.send(msglst)
-                
-        def getNext(self, n=100):
-                lst = self.PathList[:n]
-                self.PathList = self.PathList[len(lst):]
-                return lst
-
 class   VFSDB(Primitive, Logged):
 
         def __init__(self, root):

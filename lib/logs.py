@@ -36,11 +36,12 @@ class Logged(object):
 
         def __str__(self):
             # default
-            return "[%s]" % (self.__class__.__name__,)
+            return "[%s@%x]" % (self.__class__.__name__, id(self))
 
         def log(self, msg):
                 msg = "%s: %s" % (self, msg)
                 log(msg)
+                debug(msg)
 
         def debug(self, msg):
                 msg = "%s: %s" % (self, msg)

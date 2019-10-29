@@ -8,12 +8,16 @@ class RemoteReader(object):
     def __init__(self, peer_ctl_sock, peer_data_sock, tmo):
         self.CtlSock = peer_ctl_sock
         self.DataSock = peer_data_sock
+        self.PeerAddress = peer_data_sock.getpeername()
         self.NBytes = 0
         self.DataClosed = False
         if tmo is not None:
             peer_data_sock.settimeout(tmo)
         self.EOFReceived = False
         
+    def stats(self):
+        return self.PeerAddress, self.NBytes
+
     def __del__(self):
         self.close()
 
@@ -75,10 +79,14 @@ class RemoteWriter(object):
     def __init__(self, peer_ctl_sock, peer_data_sock, tmo):
         self.CtlSock = peer_ctl_sock
         self.DataSock = peer_data_sock
+        self.PeerAddress = peer_data_sock.getpeername()
         self.NBytes = 0
         if tmo is not None:
             peer_data_sock.settimeout(tmo)
         self.Closed = False
+        
+    def stats(self):
+        return self.PeerAddress, self.NBytes
 
     def write(self, data):
         self.DataSock.sendall(data)
@@ -118,7 +126,7 @@ class DataClient(object):
         t0 = time.time()
         ctl_listen_sock = socket(AF_INET, SOCK_STREAM)
         ctl_listen_sock.bind(('',0))
-        ctl_listen_sock.listen(1)
+        ctl_listen_sock.listen(0)
         ctl_listen_port = ctl_listen_sock.getsockname()[1]
 
         bcast = '%s %s %d' % (bcast_msg, self.MyHost, ctl_listen_port)
@@ -134,17 +142,17 @@ class DataClient(object):
                 pass
             else:
                 done = True
+        ctl_listen_sock.shutdown(SHUT_RDWR)
         ctl_listen_sock.close()
         bsock.close()
 
         if peer_ctl_sock is None:
                 raise RuntimeError('Request time out')
         
-
         data_listen_sock = socket(AF_INET, SOCK_STREAM)
         data_listen_sock.bind((self.MyHost,0))
         data_listen_port = data_listen_sock.getsockname()[1]
-        data_listen_sock.listen(1)
+        data_listen_sock.listen(0)
 
         ctl_str = SockStream(peer_ctl_sock)
         ctl_str.send('DATA %s %s' % (self.MyHost, data_listen_port))
@@ -155,6 +163,7 @@ class DataClient(object):
             peer_ctl_sock.close()
             raise RuntimeError('Data connection accept() time out')
         finally:
+            data_listen_sock.shutdown(SHUT_RDWR)
             data_listen_sock.close()
 
         return  peer_ctl_sock, peer_ctl_addr,  peer_data_sock, peer_data_addr   
@@ -189,7 +198,7 @@ class DataClient(object):
                     else:
                         outf.write(data)
         outf.close()
-        return True, "OK"
+        return True, outf.stats()
                         
     def get(self, info, ppath, nolocal = True, tmo = None):
         readf = self.openRead(info, nolocal, tmo)
@@ -214,7 +223,7 @@ class DataClient(object):
         else:
             fd.flush()
         readf.close()
-        return True, "OK"
+        return True, readf.stats()
 
     def ___put(self, info, ppath, ncopies = 1, nolocal = True, tmo = None):
         cmd = 'ACCEPTR' if nolocal else 'ACCEPT'

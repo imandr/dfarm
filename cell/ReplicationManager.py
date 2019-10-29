@@ -1,4 +1,5 @@
 from pythreader import Task, TaskQueue, synchronized, Primitive
+import threading, random
 from DataClient import DataClient
 from logs import Logged
 import os, time
@@ -22,18 +23,24 @@ class   Replicator(Task, Logged):
     def run(self):
         try:    f = open(self.LocalFN, "rb")
         except:
+            self.debug("Can not open data file")
             return self.Manager.done(self)
-            
+
+        self.debug("replicating...")
         ok, reason = self.DClient.put(self.FileInfo, f, self.NRep, True, 5.0)
+        f.close()
         if ok:
+            self.debug("done: %s" % (reason,))
             self.Manager.done(self)
         else:
+            self.debug("failed. will retry")
             self.Manager.retry(self)
 
 class ReplicationManager(Primitive, Logged):
     
     def __init__(self, cfg):
-        self.Replicators = TaskQueue(cfg.get('max_rep',2))
+        Primitive.__init__(self)
+        self.Replicators = TaskQueue(cfg.get('max_rep',2), stagger=0.5)
         self.DClient = DataClient(
             (cfg["broadcast"], cfg["listen_port"]),
             cfg["farm_name"]
@@ -42,7 +49,7 @@ class ReplicationManager(Primitive, Logged):
     def replicate(self, nfrep, lfn, lpath, info):
             if nfrep > 2:
                     # make 2 replicators
-                    n1 = nfrep/2
+                    n1 = nfrep//2
                     n2 = nfrep - n1
                     r = Replicator(lfn, lpath, info, n1, self.DClient, self)
                     self.debug('replicator created: %s *%d' % (lpath, n1))
@@ -60,7 +67,8 @@ class ReplicationManager(Primitive, Logged):
         
     def retry(self, rep):
         rep.reinit()
-        self.Replicators.addTask(rep)
+        t = threading.Timer(0.1 + random.random(), self.Replicators.addTask, args=(rep,))
+        t.start()
         
     def statTxns(self):
             pending, active = self.Replocators.tasks()

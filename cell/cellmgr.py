@@ -17,11 +17,12 @@ import logs
 if __name__ == '__main__':
         open("cellmgr.pid", "w").write("%d" % (os.getpid(),))
         sel = Selector()
-        opts, args = getopt.getopt(sys.argv[1:], "c:d")
+        opts, args = getopt.getopt(sys.argv[1:], "c:d:")
         opts = dict(opts)
+
         cfg = DFConfig(opts.get("-c"), 'DFARM_CONFIG')
-        debug = "-d" in opts
-        logs.set_debug(debug)
+
+
         myid = gethostname()
         domain = cfg['cell'].get('domain','')
         dot_dom = '.' + domain
@@ -36,7 +37,23 @@ if __name__ == '__main__':
         if myclass == None:
                 print('Can not determine cell class. My ID = <%s>' % myid)
                 sys.exit(1)
+
+
         class_section = cfg['class:%s' % (myclass,)]
+
+        if "-d" in opts:
+            debug = "-d" in opts
+            debug_file = opts.get("-d")
+            if debug_file == "-":   debug_file = None
+        else:
+            debug = class_section.get("debug_enabled", False)
+            debug_file = class_section.get("debug_file")
+
+        logs.set_debug(debug)
+        if debug and debug_file:
+            logs.open_debug(debug_file)            
+
+
         logpath = class_section['log']
         interval = '1d'
         if logpath:

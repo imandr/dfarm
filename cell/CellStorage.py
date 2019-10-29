@@ -14,6 +14,7 @@ from VFSFileInfo import *
 import sys
 import errno
 
+
 def free_MB(path):
         try:    
                 tup = os.statvfs(path)
@@ -21,13 +22,16 @@ def free_MB(path):
         except: 
                 return statfs.free_mb(path)
         
-class   GetTxn(DLTxn):
+class   GetTxn(DLTxn, Logged):
         def __init__(self, psa, lpath):
                 DLTxn.__init__(self, 0, psa)
                 self.PSA = psa
                 self.LPath = lpath
                 self.CAddr = None
                 
+        def __str__(self):
+            return "GetTxn[%s]" % (self.LPath,)
+            
         def dataPath(self):
                 return self.PSA.fullDataPath(self.LPath)
 
@@ -37,7 +41,7 @@ class   GetTxn(DLTxn):
         def isGetTxn(self):
                 return 1
 
-class   PutTxn(ULTxn):
+class   PutTxn(ULTxn, Logged):
         def __init__(self, size, psa, lpath, info):
                 ULTxn.__init__(self, size, psa)
                 self.PSA = psa
@@ -45,21 +49,29 @@ class   PutTxn(ULTxn):
                 self.Info = info
                 self.CAddr = None
 
+        def __str__(self):
+            return "PutTxn[%s]" % (self.LPath,)
+
         def dataPath(self):
                 return self.PSA.fullDataPath(self.LPath)
 
         def rollback(self):
+                self.debug("rollback")
                 self.PSA.receiveAborted(self.LPath)
                 Transaction.rollback(self)
 
         def commit(self):
+                self.debug("commit")
                 actSize = 0
                 actSizeMB = 0
                 try:
                         st = os.stat(self.dataPath())
                         actSize = int(st[stat.ST_SIZE])
                         actSizeMB = int(float(actSize)/1024/1024+0.5)
-                except: pass
+                except Exception as e:
+                    self.log("Error getting file size for %s: %s" % (
+                        self.dataPath(), e))
+                self.debug("actual size:%s" % (actSize,))
                 self.Info.setActualSize(actSize)
                 cellmgr_global.VFSSrvIF.sendIHave(self.LPath, self.Info)
                 self.PSA.receiveComplete(self.LPath, self.Info)
@@ -220,6 +232,7 @@ class   PSA(HasTxns, Logged):
 
         def delFile(self, lpath):
                 lpath = self.canonicPath(lpath)
+                self.debug("delFile(%s)" % (lpath,))
                 try:    
                         st = os.stat(self.fullDataPath(lpath))
                 except:

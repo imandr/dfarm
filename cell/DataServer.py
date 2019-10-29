@@ -45,6 +45,7 @@ class FileMover(Task, Logged):
             
             self.debug('control socket connected')
             stream = SockStream(csock)
+            stream.zing()
             self.debug("stream.recv...")
             msg = stream.recv()
             self.debug("msg from control: [%s]" % (msg,))
@@ -180,8 +181,8 @@ class   DataServer(Primitive, Logged):
                 if self.txnCount() >= self.MaxTxn or \
                                         self.getTxns() >= self.MaxGet:
                         return False
-                for t in self.PutMovers.activeTasks() + self.PutMovers.waitingTasks():
-                        if t.LPath == lpath:
+                for t in self.GetMovers.activeTasks() + self.GetMovers.waitingTasks():
+                        if t.Txn.LPath == lpath:
                                 return False
                 return True                        
 
@@ -191,7 +192,7 @@ class   DataServer(Primitive, Logged):
                                         self.putTxns() >= self.MaxPut:
                         return False
                 for t in self.PutMovers.activeTasks() + self.PutMovers.waitingTasks():
-                        if t.LPath == lpath:
+                        if t.Txn.LPath == lpath:
                                 return False
                 return True                        
 
@@ -207,7 +208,7 @@ class   DataServer(Primitive, Logged):
 
         def recvSocket(self, txn, caddr, delay):
                 self.debug("add write task: %s" % (txn.LPath,))
-                self.GetMovers.addTask(SocketReceiver(txn, caddr, delay))
+                self.PutMovers.addTask(SocketReceiver(txn, caddr, delay))
                 
         """ comment out
         def sendLocal(self, txn, caddr, delay):
