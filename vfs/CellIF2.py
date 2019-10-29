@@ -220,6 +220,7 @@ class   StorageCellIF(TCPServerThread, Logged):
                         if cn in self.CellMap:
                                 sts, reason = self.CellMap[cn].rereplicate(lpath, mult)
                                 if sts:
+                                        self.log("rereplicate %s %d: %s will replicate" % (lpath, mult, cn))
                                         return 1, 'OK'
                                 else:
                                         error = reason

@@ -293,7 +293,7 @@ class   PSA(HasTxns, Logged):
         def replicate(self, nfrep):
                 for lpath, info in self.listFiles():
                         if info != None:
-                                cellmgr_global.ReplicationManager.replicate(nfrep, 
+                                cellmgr_global.DataServer.replicate(nfrep, 
                                         self.fullDataPath(lpath),
                                         lpath, info)
 
@@ -453,7 +453,7 @@ class   CellStorageMgr(Logged):
                 psa, info = self.findFile(lpath)
                 if psa == None or info == None:
                         return 0, 'File not found'
-                cellmgr_global.ReplicationManager.replicate(nfrep, 
+                cellmgr_global.DataServer.replicate(nfrep, 
                         psa.fullDataPath(lpath),
                         lpath, info)
 
