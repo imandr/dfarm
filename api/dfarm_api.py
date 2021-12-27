@@ -1,14 +1,15 @@
-
-from SockStream import SockStream
+from pythreader import PyThread, DEQueue, Producer
+from fcslib import SockStream
 from VFSFileInfo import VFSFileInfo, VFSDirInfo
 from DataClient import DataClient
 import select
-import os, sys
+import os, sys, json
 import time
 import stat
 import pwd
 from socket import *
-from config import ConfigFile
+from socket import timeout as socket_timeout
+from threading import Thread
 
 from py3 import to_str, to_bytes
 
@@ -77,6 +78,55 @@ class   FileHandle:
                         else:
                                 self.reopen(tmo)
                 return data
+                
+class Pinger(Producer):
+    
+    def __init__(self, farm_name, node_addr_map, port, retries = 3, timeout = 1):
+        Producer.__init__(self, name="Pinger")
+        self.FarmName = farm_name
+        self.AddrMap = node_addr_map
+        self.Port = port
+        self.Retries = retries
+        self.Timeout = timeout
+
+    def run(self):
+        sock = socket(AF_INET, SOCK_DGRAM)
+        sock.settimeout(self.Timeout)
+        pingmsg = to_bytes('PING %s' % self.FarmName)
+        nretries = self.Retries
+        nodes = set(self.AddrMap.keys())
+        t0 = {}
+        try:
+            while nodes and nretries > 0:
+                nretries -= 1
+                
+                # send pings
+                for n in nodes:
+                    addr = (self.AddrMap[n], self.Port)
+                    sock.sendto(pingmsg, addr)
+                    t0[n] = time.time()
+
+                # listen to the echo
+                timed_out = False
+                while not timed_out and nodes:
+                    try:    
+                        msg, addr = sock.recvfrom(10000)
+                        #print("Pinger: received:", msg)
+                    except socket_timeout:
+                        timed_out = True
+                    else:
+                        words = tuple(to_str(msg).split(None, 2))
+                        #print(words)
+                        if len(words) == 3 and words[0] == "PONG":
+                            cid = words[1]
+                            data = json.loads(words[2])
+                            if cid in nodes:
+                                dt = time.time() - t0.get(cid)
+                                self.emit((cid, addr, dt, data))
+                                nodes.remove(cid)
+        finally:
+            self.close()
+            sock.close()
 
 class   DiskFarmClient:
         def __init__(self, cfg = None):
@@ -87,8 +137,8 @@ class   DiskFarmClient:
                     assert isinstance(cfg, dict)
                 self.Cfg = cfg
                 self.CAddr = (cfg["cell"]['broadcast'], cfg["cell"]['listen_port'])         
-                self.DAddr = (cfg['VFSServer']['host'],cfg['VFSServer']['api_port'])
                 self.FarmName = cfg['cell']['farm_name']
+                self.DAddr = (cfg['vfssrv']['host'],cfg['vfssrv']['api_port'])
                 
                 self.NodeList = list(cfg['cell_class'].keys())
                 if not self.NodeList:   self.NodeList = []
@@ -435,143 +485,15 @@ class   DiskFarmClient:
                 return st
 
         def ping(self, pongcbk=None, donecbk=None):
-                sock = socket(AF_INET, SOCK_DGRAM)
-                sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-                t0 = time.time()
-                lst = []
-                sock.sendto(to_bytes('PING %s' % self.FarmName, self.CAddr))
-                r,w,e = select.select([sock],[],[],3)
-                t = time.time()
-                #print r
-                while r:
-                        msg, addr = sock.recvfrom(10000)
-                        msg = to_str(msg)
-                        #print msg, addr
-                        if msg:
-                                words = msg.split()
-                                if len(words) >= 3 and words[0] == 'PONG':
-                                        words = words[1:]
-                                        cid = None
-                                        if len(words) > 2:
-                                                cid = words[0]
-                                                words = words[1:]
-                                        try:
-                                                nput = int(words[0])
-                                                nget = int(words[1])
-                                        except:
-                                                pass
-                                        else:
-                                                sts = ''
-                                                if len(words) > 2:
-                                                        sts = words[2]
-                                                capdct = {}
-                                                for w in words[3:]:
-                                                        items = w.split(':')
-                                                        try:
-                                                                psan = items[0]
-                                                                items = items[1:]
-                                                                for i in range(3):
-                                                                        if items[i][-1] == 'L':
-                                                                                items[i] = items[i][:-1]
-                                                                capdct[psan] = (int(items[0]),
-                                                                                        int(items[1]), int(items[2]))
-                                                        except:
-                                                                pass
-                                                lst.append((addr[0], cid, t-t0, nput, nget, sts, capdct))
-                                                if pongcbk != None:
-                                                        pongcbk(addr[0], cid, t-t0, nput, nget, sts, capdct)
-                        if donecbk != None and donecbk():
-                                break
-                        r,w,e = select.select([sock],[],[],0)
-                        if not r:
-                                r,w,e = select.select([sock],[],[],3)
-                                t = time.time()
-                sock.close()
-                return lst
-
-        def pingParallel(self, pongcbk=None, donecbk=None, maxping=30):
-                sock = socket(AF_INET, SOCK_DGRAM)
-                sock.setblocking(0)
-                t0 = time.time()
-                sent_times = {}
-                pingmsg = to_bytes('PING %s' % self.FarmName)
-                itosend = 0
-                nwait = 0
-                lst = []
-                while itosend < len(self.NodeList) or nwait > 0:
-                        msgs = []
-                        while nwait > 0:
-                                # collect all responses arrived so far
-                                try:    msg, addr = sock.recvfrom(100000)
-                                except:
-                                        break
-                                nwait = nwait - 1
-                                msg = to_str(msg)
-                                msgs.append((msg, addr, time.time()))
-                        while nwait >= maxping or \
-                                        (nwait > 0 and itosend >= len(self.NodeList)):
-                                # wait for answers if necessary
-                                r,w,e = select.select([sock],[],[],1)
-                                if r:
-                                        msg, addr = sock.recvfrom(100000)
-                                        msg = to_str(msg)
-                                        msgs.append((msg, addr, time.time()))
-                                        nwait = nwait - 1
-                                else:
-                                        # we have waited for 3 seconds, and are not getting 
-                                        # any answers - do not wait any longer
-                                        nwait = 0
-                        while nwait < maxping and itosend < len(self.NodeList):
-                                # send as many pings as we are allowed
-                                n = self.NodeList[itosend]
-                                itosend = itosend + 1
-                                nwait = nwait + 1
-                                addr = (self.NodeAddrMap[n], self.CAddr[1])
-                                try:    sock.sendto(pingmsg, addr)
-                                except: raise
-                                sent_times[n] = time.time()
-                        for msg, addr, t in msgs:
-                                msg = to_str(msg)
-                                words = msg.split()
-                                if len(words) >= 3 and words[0] == 'PONG':
-                                        words = words[1:]
-                                        cid = None
-                                        if len(words) > 2:
-                                                cid = words[0]
-                                                words = words[1:]
-                                        if not cid or cid not in sent_times:
-                                                continue
-                                        t0 = sent_times[cid]
-                                        try:
-                                                nput = int(words[0])
-                                                nget = int(words[1])
-                                                nrep = int(words[2])
-                                        except:
-                                                pass
-                                        else:
-                                                sts = ''
-                                                if len(words) > 2:
-                                                        sts = words[3]
-                                                capdct = {}
-                                                for w in words[4:]:
-                                                        items = w.split(':')
-                                                        try:
-                                                                psan = items[0]
-                                                                items = items[1:]
-                                                                for i in range(3):
-                                                                        if items[i][-1] == 'L':
-                                                                                items[i] = items[i][:-1]
-                                                                capdct[psan] = (int(items[0]),
-                                                                                        int(items[1]), int(items[2]))
-                                                        except:
-                                                                pass
-                                                lst.append((addr[0], cid, t-t0, nput, nget, nrep, sts, capdct))
-                                                if pongcbk != None:
-                                                        pongcbk(addr[0], cid, t-t0, nput, nget, nrep, sts, capdct)
-                        if donecbk != None and donecbk():
-                                break
-                sock.close()
-                return lst
+            pinger = Pinger(self.FarmName, self.NodeAddrMap, self.CAddr[1])
+            lst = []
+            for cid, addr, delay, status in pinger:
+                if pongcbk is not None:
+                    pongcbk(addr, cid, delay, status)
+                lst.append((cid, addr, delay, status))
+            if donecbk is not None:
+                donecbk(lst)
+            return lst
 
         def get(self, info, fn, nolocal = True, tmo = None):
             data_client = DataClient(self.CAddr, self.FarmName)

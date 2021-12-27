@@ -1,29 +1,22 @@
-import sqlite3
 from pythreader import Primitive, synchronized
 import threading
+from sqlite_connection import SQLiteDB
 
 class VFSDBStorage(Primitive):
 
-    _GLock = threading.RLock()
-    _DBLocks = {}
-    
     def __init__(self, dbfile, root_info):
-        with VFSDBStorage._GLock:
-            if dbfile in VFSDBStorage._DBLocks:
-                dblock = VFSDBStorage._DBLocks[dbfile]
-            else:
-                dblock = VFSDBStorage._DBLocks[dbfile] = threading.RLock()
-        Primitive.__init__(self, lock=dblock)
-        self.DB = sqlite3.connect(dbfile, check_same_thread = False)
-        self.DB.cursor().execute("""
-            create table if not exists vfs (
-                dpath text,
-                key text,
-                type text,
-                info text,
-                primary key (dpath, key)
-            );
-            """)
+        Primitive.__init__(self)
+        self.DB = SQLiteDB(dbfile)
+        with self.DB.transaction() as t:
+            t.execute("""
+                create table if not exists vfs (
+                    dpath text,
+                    key text,
+                    type text,
+                    info text,
+                    primary key (dpath, key)
+                );
+                """)
 
         if self.type("/") != 'd':
                 self.mkdir("/", root_info)
@@ -38,8 +31,8 @@ class VFSDBStorage(Primitive):
 
     @synchronized        
     def listItems(self, dpath):
-        c = self.DB.cursor()
-        c.execute("select key, type, info from vfs where dpath=?", (dpath,))
+        with self.DB.transaction() as c:
+            c.execute("select key, type, info from vfs where dpath=?", (dpath,))
         while True:
             tup = c.fetchone()
             if tup is None:
@@ -49,11 +42,11 @@ class VFSDBStorage(Primitive):
     @synchronized        
     def getItem(self, path):
         parent, key = self.split_path(path)
-        c = self.DB.cursor()
-        c.execute("select type, info from vfs where dpath=? and key=?", (parent, key))
-        tup = c.fetchone()
-        if tup is None: return None, None
-        else: return tup
+        with self.DB.transaction() as c:
+            c.execute("select type, info from vfs where dpath=? and key=?", (parent, key))
+            tup = c.fetchone()
+            if tup is None: return None, None
+            else: return tup
         
     def type(self, path):
         typ, info = self.getItem(path)
@@ -61,9 +54,8 @@ class VFSDBStorage(Primitive):
 
     @synchronized
     def delItemsUnder(self, path, typ='f'):
-        c = self.DB.cursor()
-        c.execute("delete from vfs where dpath=? and type=?", (path, typ))
-        self.DB.commit()
+        with self.DB.transaction() as c:
+            c.execute("delete from vfs where dpath=? and type=?", (path, typ))
         
     @synchronized
     def delItem(self, path):
@@ -76,9 +68,8 @@ class VFSDBStorage(Primitive):
                 if not empty:
                         raise RuntimeError("Directory %s not empty" % (path,))
         parent, key = self.split_path(path)
-        c = self.DB.cursor()
-        c.execute("delete from vfs where dpath=? and key = ?", (parent, key))
-        self.DB.commit()
+        with self.DB.transaction() as c:
+            c.execute("delete from vfs where dpath=? and key = ?", (parent, key))
     
 
     @synchronized
@@ -91,9 +82,8 @@ class VFSDBStorage(Primitive):
                 if not empty:
                         raise RuntimeError("Directory %s not empty" % (path,))
         parent, key = self.split_path(path)
-        c = self.DB.cursor()
-        c.execute("delete from vfs where dpath=? and key = ?", (parent, key))
-        self.DB.commit()
+        with self.DB.transaction() as c:
+            c.execute("delete from vfs where dpath=? and key = ?", (parent, key))
         
     @synchronized
     def putItem(self, path, typ, info):
@@ -101,10 +91,9 @@ class VFSDBStorage(Primitive):
         if existing_type is not None and typ != existing_type:
                 raise ValueError("Can not change item type from %s to %s for %s" % (existing_type, typ, path))
         parent, key = self.split_path(path)
-        c = self.DB.cursor()
-        c.execute("""
-            insert or replace into vfs (dpath, key, type, info) values (?, ?, ?, ?)""", (parent, key, typ, info))
-        self.DB.commit()
+        with self.DB.transaction() as c:
+            c.execute("""
+                insert or replace into vfs (dpath, key, type, info) values (?, ?, ?, ?)""", (parent, key, typ, info))
 
     def mkdir(self, path, info):
         self.putItem(path, 'd', info)

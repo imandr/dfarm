@@ -1,5 +1,4 @@
-from TCPServerThread import TCPServerThread
-from TCPClientConnectionTask import TCPClientConnectionTask
+from fcslib import TCPServerThread, TCPClientConnectionTask
 from VFSFileInfo import VFSFileInfo, VFSDirInfo, VFSCanonicPath
 import sys
 import vfssrv_global
@@ -146,14 +145,8 @@ class   VFSClientConnection(TCPClientConnectionTask, Logged):
                 return None
 
         def sendList(self, lst):
-            def batches(lst):
-                while lst:
-                    yield lst[:100]
-                    lst = lst[100:]
-            lst = sorted(list(lst))
-            for batch in batches(lst):
-                msgs = ["%s %s %s" % (lp, typ, info.serialize()) for lp, typ, info in batch]
-                if msgs:    self.Str.send(msgs)
+            for lp, typ, info in lst:
+                self.Str.send("%s %s %s" % (lp, typ, info.serialize()))
             self.Str.send(".")
 
         def doListDirContents(self, lpath):
@@ -473,7 +466,7 @@ class   VFSClientConnection(TCPClientConnectionTask, Logged):
                         'HELLO' :       doHello,
                         'DF'    :       doDelFile,
                         'CHMOD' :       doChMod,
-                        'SATTR' :               doSetAttr,
+                        'SATTR' :       doSetAttr,
                         'LIST'  :       doList,
                         'GET'   :       doGetInfo,
                         'GETT'  :       doGetType,
@@ -481,8 +474,8 @@ class   VFSClientConnection(TCPClientConnectionTask, Logged):
                         'MD'    :       doMkDir,
                         'DD'    :       doDelDir,
                         'REPNODE'       :       doRepNode,
-                        'RR'    :               doRereplicate,
-                        'HOLD'  :               doHold,
+                        'RR'    :       doRereplicate,
+                        'HOLD'  :       doHold,
                         'RELEASE'       :       doRelease,
                         'USAGE' :       doGetUsage                      
                 }

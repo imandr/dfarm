@@ -1,5 +1,4 @@
-from TCPServerThread import TCPServerThread
-from TCPClientConnectionTask import TCPClientConnectionTask
+from fcslib import TCPServerThread, TCPClientConnectionTask
 import sys
 import vfssrv_global
 import glob

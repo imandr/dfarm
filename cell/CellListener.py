@@ -1,7 +1,7 @@
 from socket import *
 from VFSFileInfo import *
 from pythreader import PyThread
-import cellmgr_global
+import cellmgr_global, json
 from logs import Logged
 
 from py3 import to_str, to_bytes
@@ -119,11 +119,18 @@ class   CellListener(PyThread, Logged):
                                 retaddr = (args[0], int(args[1]))
                         except:
                                 return None
-                ans = 'PONG %s %d %d %d %s' % (self.MyID, np, ng, nr, 
-                                self.CellStorage.status())
-                #print("sending pong:", ans)
-                try:    self.Sock.sendto(to_bytes(ans), retaddr)
-                except: raise
+                data = dict(
+                    status = self.CellStorage.status(),
+                    nput = np, nget = ng, nrep = nr,
+                    psa_stats = self.CellStorage.psa_stats()
+                )
+                
+                ans = 'PONG %s %s' % (self.MyID, json.dumps(data))
+                try:
+                    self.debug("CellListener.doPing: replying to: %s" % (retaddr,))    
+                    self.Sock.sendto(to_bytes(ans), retaddr)
+                except: 
+                    raise
                 return None
                         
         def doAccept(self, args, msg, addr, nolocal=0):

@@ -1,6 +1,6 @@
 import cellmgr_global
 from socket import *
-from SockStream import SockStream
+from fcslib import SockStream
 import time
 import sys
 import random

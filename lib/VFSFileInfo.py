@@ -29,7 +29,7 @@
 #
 
 import time
-import serialize
+from fcslib import serialize, deserialize
 
 def VFSCanonicPath(path):
         if not path:
@@ -125,7 +125,7 @@ class   VFSFileInfo(VFSItemInfo):
                 if not short:
                         for n in ['Servers','Attrs']:
                                 dict[n] = self.__dict__[n]
-                return '[%s] %s' % (self.Version, serialize.serialize(dict))
+                return '[%s] %s' % (self.Version, serialize(dict))
                 
         def deserialize(self, str):
                 words = str.split()
@@ -152,7 +152,7 @@ class   VFSFileInfo(VFSItemInfo):
                         self.Servers = words[4:]
                 else:   # v >= '2'
                         info = str.split(None,1)[1]
-                        dict, rest = serialize.deserialize(info)
+                        dict, rest = deserialize(info)
                         for n in ['CTime','Username','Size','Prot','Servers',
                                                 'Flags','Attrs']:
                                 if n in dict:
@@ -167,7 +167,7 @@ class   VFSDirInfo(VFSItemInfo):
                 dict = {}
                 for n in ['Username','Prot','Attrs','Flags']:
                         dict[n] = self.__dict__[n]
-                return '[%s] %s' % (self.Version, serialize.serialize(dict))
+                return '[%s] %s' % (self.Version, serialize(dict))
 
         def deserialize(self, str):
                 lst = str.split()
@@ -182,7 +182,7 @@ class   VFSDirInfo(VFSItemInfo):
                                 self.Prot = lst[1]
                         else:   # >= 2
                                 info = str.split(None, 1)[1]
-                                dict, rest = serialize.deserialize(info)
+                                dict, rest = deserialize(info)
                                 for n in ['Username','Prot','Attrs','Flags']:
                                         if n in dict:
                                                 self.__dict__[n] = dict[n]

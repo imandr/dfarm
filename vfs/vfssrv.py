@@ -6,7 +6,7 @@ from QuotaMgr import QuotaManager
 from LogFile import LogFile
 import vfssrv_global
 #from config import ConfigFile
-import yaml, getopt
+import getopt
 import signal
 import os, sys
 import time
@@ -29,18 +29,20 @@ if __name__ == '__main__':
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
     opts = dict(opts)
-    cfg = DFConfig(opts.get("-c"), 'DFARM_VFS_CONFIG')["VFSServer"]
+    cfg = DFConfig(opts.get("-c"), 'DFARM_CONFIG')["vfssrv"]
     
     logpath = cfg.get('log')
     interval = '1d'
     logs.open_log(logpath, interval)
     logs.set_debug("-d" in opts)
     set_signals()
-    vfssrv_global.G_VFSServer = VFSServer(cfg).start()
+    vfssrv_global.G_VFSServer = VFSServer(cfg)
+    vfssrv_global.G_VFSServer.start()
     vfssrv_global.G_VFSDB = VFSDB(cfg['db_root'])
-    vfssrv_global.G_CellIF = StorageCellIF(cfg).start()
+    vfssrv_global.G_CellIF = StorageCellIF(cfg)
+    vfssrv_global.G_CellIF.start()
     vfssrv_global.G_QuotaMgr = QuotaManager(cfg)
-
+    
     logs.log('VFS Server started at %s, pid=%s' %
                     (time.ctime(time.time()), os.getpid()))
 

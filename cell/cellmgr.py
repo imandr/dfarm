@@ -1,7 +1,6 @@
 from VFSSrvIF import VFSSrvIF
 from CellStorage import CellStorageMgr
 import cellmgr_global
-from Selector import Selector
 from DataServer import DataServer
 from CellListener import CellListener
 from socket import *
@@ -14,14 +13,12 @@ import logs
 
 if __name__ == '__main__':
         open("cellmgr.pid", "w").write("%d" % (os.getpid(),))
-        sel = Selector()
-        opts, args = getopt.getopt(sys.argv[1:], "c:d:")
+        opts, args = getopt.getopt(sys.argv[1:], "c:d:i:")
         opts = dict(opts)
 
         cfg = DFConfig(opts.get("-c"), 'DFARM_CONFIG')
 
-
-        myid = gethostname()
+        myid = opts.get("-i") or gethostname()
         domain = cfg['cell'].get('domain','')
         dot_dom = '.' + domain
         ld = len(dot_dom)
@@ -37,7 +34,7 @@ if __name__ == '__main__':
                 sys.exit(1)
 
 
-        class_section = cfg['class:%s' % (myclass,)]
+        class_section = cfg['storage %s' % (myclass,)]
 
         if "-d" in opts:
             debug = "-d" in opts
@@ -60,7 +57,7 @@ if __name__ == '__main__':
         logs.open_log(logpath, interval)
         cellmgr_global.DataServer = data_server = DataServer(myclass, cfg["cell"], class_section)
         cellmgr_global.CellStorage = cell_storage = CellStorageMgr(myid, myclass, class_section)
-        cellmgr_global.VFSSrvIF = vfs_srv_if = VFSSrvIF(myid, cfg["VFSServer"], cell_storage)
+        cellmgr_global.VFSSrvIF = vfs_srv_if = VFSSrvIF(myid, cfg["vfssrv"], cell_storage)
         cell_listener = CellListener(myid, cfg["cell"], data_server, cell_storage, vfs_srv_if)
         cell_listener.enable()
         cell_listener.start()

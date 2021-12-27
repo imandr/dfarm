@@ -358,17 +358,16 @@ class   CellStorageMgr(Logged):
                 self.IsHeld = 0         
 
         def status(self):
-                ret = ''
-                if self.IsHeld:
-                        ret = '(held)'
-                else:
-                        ret = '(OK)'
-                for psan in self.listPSAs():
-                        size, used, rsrvd, free = self.getPSA(psan).status()
-                        ret = ret + (" %s:%s:%s:%s" % 
-                                                (psan, size, size - used - rsrvd, free - rsrvd))
-                return ret
-                        
+            return 'held' if self.IsHeld else 'OK'
+
+        def psa_stats(self):
+            out = {}
+            for psan in self.listPSAs():
+                size, used, rsrvd, free = self.getPSA(psan).status()
+                out[psan] = dict(
+                    size=size, used=used, reserved=rsrvd, free=free
+                )
+            return out
 
         def hold(self):
                 self.IsHeld = 1

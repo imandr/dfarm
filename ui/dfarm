@@ -26,7 +26,6 @@ Commands: ls [-1] [-A|-a <attr>[,<attr>...]] [-s <attr>[,<attr>...]]
 """
 
 
-from config import *
 import sys, os, stat, time
 import getopt
 from dfarm_api import DiskFarmClient
@@ -72,21 +71,19 @@ class   PingPrinter:
                 except: ny = 0
                 return cmp(px, py) or cmp(nx, ny)
                 
-        def done(self):
-                for n in self.NodeList:
-                        # print n, self.NodeDict.has_key(n)
-                        if n not in self.NodeDict:
-                                return 0
-                return 1
-                                                
-        def pong(self, addr, cid, t, np, ng, nr, sts, capdct):
+        def pong(self, addr, cid, t, status):
                 #print 'pong: %s' % cid, cid in self.NodeList
                 self.NUp = self.NUp + 1
+                np = status["nput"]
+                ng = status["nget"]
+                nr = status["nrep"]
                 if np != None:          self.NPut = self.NPut + np
                 if ng != None:          self.NGet = self.NGet + ng
                 if nr != None:          self.NRep = self.NRep + nr
-                for psan, caps in list(capdct.items()):
-                        size, lfree, pfree = caps
+                for psan, caps in status["psa_stats"].items():
+                        cap = caps["size"]
+                        lfree = caps["size"] - caps["used"] - caps["reserved"]
+                        pfree = caps["free"] - caps["reserved"]
                         f = min(lfree, pfree)
                         self.FreeSpace = self.FreeSpace + f
                         if f >= 1024:
@@ -103,7 +100,7 @@ class   PingPrinter:
                                 self.MaxT = t
                 if cid == None:
                         cid = gethostbyaddr(addr)[0]
-                self.NodeDict[cid] = (t, np, ng, nr, sts)
+                self.NodeDict[cid] = (t, np, ng, nr, status["status"])
                 self.printCells()
                 
         def printCells(self):
@@ -133,15 +130,12 @@ class   PingPrinter:
                                 
         def getStats(self):
                 if self.NUp == 0:
-                        return self.NUp, self.NDown, None, None, None, None, None
+                        return self.NUp, self.NDown, None, None, None, None, None, None
                 return (self.NUp, self.NDown,
                         (self.MinT * 1000 + 0.5), 
                         (self.MaxT * 1000 + 0.5), 
                         (self.TimeSum/self.NUp * 1000 + 0.5),
                         self.NPut, self.NGet, self.NRep)
-
-
-
 
 class   CapacityPrinter:
         def __init__(self, cfg):
@@ -164,11 +158,13 @@ class   CapacityPrinter:
                                 return 0
                 return 1
                                                 
-        def pong(self, addr, cid, t, nw, nr, sts, capdct):
+        def pong(self, addr, cid, dt, status):
                 #print 'pong: %s' % cid, cid in self.NodeList
                 self.NUp = self.NUp + 1
-                for psan, caps in list(capdct.items()):
-                        cap, lfree, pfree = caps
+                for psan, stats in status["psa_stats"].items():
+                        cap = stats["size"]
+                        lfree = stats["size"] - stats["used"] - stats["reserved"]
+                        pfree = stats["free"] - stats["reserved"]
                         f = min(lfree, pfree)
                         self.FreeSpace = self.FreeSpace + f
                         self.Capacity = self.Capacity + cap
@@ -635,10 +631,9 @@ elif cmd == 'repfile':
 
 elif cmd == 'ping':
         pw = PingPrinter(cfg, sys.stdout, '%20s %5dms %4dp %4dg %4dr %s\n', '%20s -- not responding --\n')
-        lst = c.pingParallel(pw.pong, pw.done)
+        lst = c.ping(pw.pong)
         pw.close()
-        nup, ndown, mint, maxt, avgt, tput, tget, trep = \
-                pw.getStats()
+        nup, ndown, mint, maxt, avgt, tput, tget, trep = pw.getStats()
         if nup or ndown:
                 print('--- %d/%d nodes up --------------------------------' % \
                         (nup, nup+ndown))

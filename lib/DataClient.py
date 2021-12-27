@@ -1,7 +1,7 @@
 from socket import *
 import time
 from py3 import to_bytes, to_str
-from SockStream import SockStream
+from fcslib import SockStream
 
 class DCTimeOut(Exception):
     pass

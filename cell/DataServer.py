@@ -1,4 +1,4 @@
-from SockStream import SockStream
+from fcslib import SockStream
 from socket import *
 import sys, os, time, random, threading
 from pythreader import Task, synchronized, Primitive, TaskQueue
